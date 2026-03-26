@@ -123,6 +123,10 @@ test("zipcode-search docs lock the official ePost extraction flow and reliable t
     assert.match(doc, /"--retry",\s+"3"/);
     assert.match(doc, /--retry-all-errors/);
     assert.match(doc, /"--retry-delay",\s+"1"/);
+    assert.match(doc, /mktemp|임시 파일/);
+    assert.match(doc, /curl: \(23\)/);
+    assert.match(doc, /짧은 도로명 \+ 건물번호/);
+    assert.match(doc, /시\/군\/구 포함 전체 주소/);
     assert.doesNotMatch(doc, /urllib\.request/);
     assert.doesNotMatch(doc, /urlopen/);
   }
