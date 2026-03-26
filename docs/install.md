@@ -44,8 +44,11 @@ k-skill-setup 스킬을 사용해서 공통 설정을 진행해줘.
 
 ```bash
 npx --yes skills add <owner/repo> \
+  --skill hwp \
   --skill kbo-results \
-  --skill lotto-results
+  --skill lotto-results \
+  --skill kakaotalk-mac \
+  --skill zipcode-search
 ```
 
 인증이 필요한 기능만 부분 설치할 때도 `k-skill-setup` 은 같이 넣는다.
@@ -92,8 +95,16 @@ npm run ci
 ### Node 패키지
 
 ```bash
-npm install -g kbo-game k-lotto
+npm install -g @ohah/hwpjs kbo-game k-lotto
 export NODE_PATH="$(npm root -g)"
+```
+
+### macOS 바이너리
+
+카카오톡 Mac CLI는 npm 패키지가 아니라 Homebrew tap 설치를 사용한다.
+
+```bash
+brew install silver-flight-group/tap/kakaocli
 ```
 
 ### Python 패키지
