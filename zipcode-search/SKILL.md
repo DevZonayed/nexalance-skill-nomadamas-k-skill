@@ -23,6 +23,7 @@ metadata:
 ## Prerequisites
 
 - 인터넷 연결
+- `curl`
 - 선택 사항: `python3`
 
 ## Inputs
@@ -44,21 +45,45 @@ https://parcel.epost.go.kr/parcel/comm/zipcode/comm_newzipcd_list.jsp
 
 요청은 `keyword` 파라미터 하나만으로도 동작한다.
 
-### 2. Fetch the HTML and extract the candidate rows
+### 2. Fetch the HTML with curl and extract the candidate rows
+
+현재 ePost 엔드포인트는 응답이 간헐적으로 reset/timeout 될 수 있으므로, 로컬 `python3` 기본 `urllib` 전송 대신 `curl --http1.1 --tls-max 1.2` + 재시도 경로를 기본 예시로 사용한다.
 
 ```bash
 python3 - <<'PY'
 import html
 import re
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+import subprocess
 
 query = "세종대로 209"
-url = "https://parcel.epost.go.kr/parcel/comm/zipcode/comm_newzipcd_list.jsp?" + urlencode({"keyword": query})
-request = Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.8"})
-
-with urlopen(request, timeout=20) as response:
-    page = response.read().decode("utf-8", "ignore")
+cmd = [
+    "curl",
+    "--http1.1",
+    "--tls-max",
+    "1.2",
+    "--silent",
+    "--show-error",
+    "--location",
+    "--retry",
+    "3",
+    "--retry-all-errors",
+    "--retry-delay",
+    "1",
+    "--max-time",
+    "20",
+    "--get",
+    "--data-urlencode",
+    f"keyword={query}",
+    "https://parcel.epost.go.kr/parcel/comm/zipcode/comm_newzipcd_list.jsp",
+]
+result = subprocess.run(
+    cmd,
+    check=True,
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+)
+page = result.stdout
 
 matches = re.findall(
     r'name="sch_zipcode"\s+value="([^"]+)".*?name="sch_address1"\s+value="([^"]+)".*?name="sch_bdNm"\s+value="([^"]*)"',
@@ -76,6 +101,8 @@ PY
 ```
 
 핵심 필드는 `sch_zipcode`(우편번호), `sch_address1`(기본 주소), `sch_bdNm`(건물명)이다.
+
+바깥쪽 Python `timeout`은 두지 말고 `curl` 자체 제한(`--max-time` + `--retry`)으로 전송 시간을 제어한다. 전송 실패가 나도 바로 다른 소스로 우회하지 말고, 위 재시도 옵션 그대로 한 번 더 실행한 뒤 키워드를 더 구체화한다.
 
 ### 3. Normalize for humans
 
@@ -104,6 +131,8 @@ PY
 
 - 우체국 검색 페이지 마크업이 바뀌면 `sch_zipcode` 추출 규칙이 깨질 수 있다
 - 주소 키워드가 너무 넓으면 결과가 과하게 많아질 수 있다
+- 재시도 없이 한 번만 호출하면 timeout/reset 같은 일시 오류가 날 수 있다
+- `curl` 없이 기본 `urllib` 전송으로 바로 붙으면 연결 reset이 날 수 있다
 
 ## Notes
 
