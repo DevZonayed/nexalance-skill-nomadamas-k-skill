@@ -130,6 +130,15 @@ status_map = {
 }
 
 latest = events[-1]
+normalized_events = [
+    {
+        "timestamp": event.get("dTime"),
+        "location": event.get("regBranNm"),
+        "status_code": event.get("crgSt"),
+        "status": status_map.get(event.get("crgSt"), event.get("scanNm") or "알수없음"),
+    }
+    for event in events
+]
 print(json.dumps({
     "carrier": "cj",
     "invoice": payload["parcelDetailResultMap"]["paramInvcNo"],
@@ -138,6 +147,7 @@ print(json.dumps({
     "timestamp": latest.get("dTime"),
     "location": latest.get("regBranNm"),
     "event_count": len(events),
+    "recent_events": normalized_events[-min(3, len(normalized_events)):],
 }, ensure_ascii=False, indent=2))
 PY
 
@@ -146,7 +156,7 @@ rm -f "$tmp_body" "$tmp_cookie" "$tmp_json"
 
 추가 smoke test 로는 `000000000000` 도 사용할 수 있다.
 
-CJ 응답은 `parcelResultMap.resultList` 가 비어 있어도 `parcelDetailResultMap.resultList` 쪽에 이벤트가 들어올 수 있으므로, 상세 이벤트 배열을 우선 본다. 예시 출력은 `crgSt` / `scanNm` / `dTime` / `regBranNm` / 이벤트 수처럼 비식별 필드만 요약하고, 담당자 이름·연락처가 섞일 수 있는 `crgNm` 원문은 그대로 보여주지 않는다.
+CJ 응답은 `parcelResultMap.resultList` 가 비어 있어도 `parcelDetailResultMap.resultList` 쪽에 이벤트가 들어올 수 있으므로, 상세 이벤트 배열을 우선 본다. published 예시는 공통 결과 스키마(`carrier`, `invoice`, `status`, `timestamp`, `location`, `event_count`, `recent_events`, 선택적 `status_code`)에 맞춰 비식별 필드만 남기고, 담당자 이름·연락처가 섞일 수 있는 `crgNm` 원문은 그대로 보여주지 않는다.
 
 ### 2. 우체국: official HTML flow
 
@@ -162,11 +172,12 @@ CJ 응답은 `parcelResultMap.resultList` 가 비어 있어도 `parcelDetailResu
 tmp_html="$(mktemp)"
 python3 - <<'PY' "$tmp_html"
 import html
+import json
 import re
 import subprocess
 import sys
 
-tracking_no = "1234567890123"  # 공식 페이지 placeholder 성격의 smoke-test 값
+invoice = "1234567890123"  # 공식 페이지 placeholder 성격의 smoke-test 값
 output_path = sys.argv[1]
 
 cmd = [
@@ -187,7 +198,7 @@ cmd = [
     "-o",
     output_path,
     "-d",
-    f"sid1={tracking_no}",
+    f"sid1={invoice}",
     "https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm",
 ]
 subprocess.run(cmd, check=True)
@@ -211,6 +222,10 @@ def clean(raw: str) -> str:
     text = re.sub(r"<[^>]+>", " ", raw)
     return " ".join(html.unescape(text).split())
 
+def clean_location(raw: str) -> str:
+    text = clean(raw)
+    return re.sub(r"\s*(TEL\s*:?\s*)?\d{2,4}[.\-]\d{3,4}[.\-]\d{4}", "", text).strip()
+
 events = re.findall(
     r"<tr>\s*<td>(\d{4}\.\d{2}\.\d{2})</td>\s*"
     r"<td>(\d{2}:\d{2})</td>\s*"
@@ -222,41 +237,42 @@ events = re.findall(
 
 normalized_events = [
     {
-        "date": day,
-        "time": time_,
-        "location": clean(location),
+        "timestamp": f"{day} {time_}",
+        "location": clean_location(location),
         "status": clean(status),
     }
-    for day, time_, location, status, detail in events
+    for day, time_, location, status, _detail in events
 ]
 
 latest_event = normalized_events[-1] if normalized_events else None
 
-print({
+print(json.dumps({
     "carrier": "epost",
-    "tracking_no": clean(summary.group("tracking")),
+    "invoice": clean(summary.group("tracking")),
     "status": clean(summary.group("result")),
+    "timestamp": latest_event["timestamp"] if latest_event else None,
+    "location": latest_event["location"] if latest_event else None,
     "event_count": len(normalized_events),
-    "latest_event_date": latest_event.get("date") if latest_event else None,
-    "latest_event_time": latest_event.get("time") if latest_event else None,
-    "latest_event_location": latest_event.get("location") if latest_event else None,
-})
+    "recent_events": normalized_events[-min(3, len(normalized_events)):],
+}, ensure_ascii=False, indent=2))
 PY
 rm -f "$tmp_html"
 ```
 
-우체국 기본정보 테이블은 `등기번호`, `보내는 분/접수일자`, `받는 분`, `수령인/배달일자`, `취급구분`, `배달결과` 순서를 사용하고, 상세 이벤트는 `processTable` 아래 `날짜 / 시간 / 발생국 / 처리현황` 행을 읽으면 된다. published 예시는 `tracking_no`, 현재 상태, 이벤트 수, 최신 이벤트 시각/위치처럼 배송 상태에 필요한 값만 남기고 수령인/상세 메모 원문은 그대로 노출하지 않는다.
+우체국 기본정보 테이블은 `등기번호`, `보내는 분/접수일자`, `받는 분`, `수령인/배달일자`, `취급구분`, `배달결과` 순서를 사용하고, 상세 이벤트는 `processTable` 아래 `날짜 / 시간 / 발생국 / 처리현황` 행을 읽으면 된다. published 예시는 CJ와 같은 공통 결과 스키마(`carrier`, `invoice`, `status`, `timestamp`, `location`, `event_count`, `recent_events`)에 맞춰 배송 상태에 필요한 값만 남기고, 이벤트 location에 섞일 수 있는 `TEL` 번호 조각도 제거한 뒤 수령인/상세 메모 원문은 그대로 노출하지 않는다.
 
 ### 3. Normalize for humans
 
-응답 원문을 그대로 붙이지 말고 아래 순서로 요약한다.
+응답 원문을 그대로 붙이지 말고 아래 공통 필드로 요약한다.
 
 - 택배사
 - 송장번호
 - 현재 상태
 - 마지막 이벤트 시각
 - 마지막 이벤트 위치
+- 전체 이벤트 수
 - 최근 3~5개 이벤트
+- 필요할 때만 원본 상태 코드(`status_code`)
 
 ### 4. Retry and fallback policy
 
