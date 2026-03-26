@@ -35,6 +35,14 @@ function findRecentEventsBlock(doc, carrier) {
   return block;
 }
 
+function findJsonFenceAfterLabel(doc, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = doc.match(new RegExp(`${escaped}[\\s\\S]*?\\\`\\\`\\\`json\\n([\\s\\S]*?)\\n\\\`\\\`\\\``));
+
+  assert.ok(match, `expected JSON example after "${label}"`);
+  return JSON.parse(match[1]);
+}
+
 test("root npm test script includes the skill docs regression suite", () => {
   const packageJson = JSON.parse(read("package.json"));
 
@@ -328,4 +336,68 @@ test("delivery-tracking published examples lock a shared normalized non-PII sche
 
   assert.doesNotMatch(skill, /"message":\s*latest\.get\("crgNm"\)/);
   assert.doesNotMatch(featureDoc, /print\(\{\s*"tracking_no"/);
+});
+
+test("delivery-tracking docs publish aligned sample normalized outputs for both carriers", () => {
+  const skill = read(path.join("delivery-tracking", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "delivery-tracking.md"));
+  const cjSkillOutput = findJsonFenceAfterLabel(skill, "CJ 공개 출력 예시");
+  const cjFeatureOutput = findJsonFenceAfterLabel(featureDoc, "CJ 공개 출력 예시");
+  const epostSkillOutput = findJsonFenceAfterLabel(skill, "우체국 공개 출력 예시");
+  const epostFeatureOutput = findJsonFenceAfterLabel(featureDoc, "우체국 공개 출력 예시");
+
+  assert.deepEqual(cjSkillOutput, cjFeatureOutput, "CJ sample output must stay aligned across docs");
+  assert.deepEqual(epostSkillOutput, epostFeatureOutput, "ePost sample output must stay aligned across docs");
+
+  assert.deepEqual(Object.keys(cjSkillOutput), [
+    "carrier",
+    "invoice",
+    "status_code",
+    "status",
+    "timestamp",
+    "location",
+    "event_count",
+    "recent_events",
+  ]);
+  assert.equal(cjSkillOutput.carrier, "cj");
+  assert.equal(cjSkillOutput.invoice, "1234567890");
+  assert.equal(typeof cjSkillOutput.status, "string");
+  assert.equal(typeof cjSkillOutput.timestamp, "string");
+  assert.equal(typeof cjSkillOutput.location, "string");
+  assert.equal(typeof cjSkillOutput.event_count, "number");
+  assert.ok(Array.isArray(cjSkillOutput.recent_events));
+  assert.ok(cjSkillOutput.recent_events.length > 0 && cjSkillOutput.recent_events.length <= 3);
+  for (const event of cjSkillOutput.recent_events) {
+    assert.deepEqual(Object.keys(event), ["timestamp", "location", "status_code", "status"]);
+  }
+
+  assert.deepEqual(Object.keys(epostSkillOutput), [
+    "carrier",
+    "invoice",
+    "status",
+    "timestamp",
+    "location",
+    "event_count",
+    "recent_events",
+  ]);
+  assert.equal(epostSkillOutput.carrier, "epost");
+  assert.equal(epostSkillOutput.invoice, "1234567890123");
+  assert.equal(typeof epostSkillOutput.status, "string");
+  assert.equal(typeof epostSkillOutput.timestamp, "string");
+  assert.equal(typeof epostSkillOutput.location, "string");
+  assert.equal(typeof epostSkillOutput.event_count, "number");
+  assert.ok(Array.isArray(epostSkillOutput.recent_events));
+  assert.ok(epostSkillOutput.recent_events.length > 0 && epostSkillOutput.recent_events.length <= 3);
+  for (const event of epostSkillOutput.recent_events) {
+    assert.deepEqual(Object.keys(event), ["timestamp", "location", "status"]);
+    assert.ok(!JSON.stringify(event).includes("TEL"));
+  }
+
+  for (const output of [cjSkillOutput, epostSkillOutput]) {
+    const serialized = JSON.stringify(output);
+    assert.ok(!serialized.includes("crgNm"));
+    assert.ok(!serialized.includes("sender"));
+    assert.ok(!serialized.includes("receiver"));
+    assert.ok(!serialized.includes("delivered_to"));
+  }
 });

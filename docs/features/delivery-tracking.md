@@ -105,6 +105,42 @@ PY
 rm -f "$tmp_body" "$tmp_cookie" "$tmp_json"
 ```
 
+### CJ 공개 출력 예시
+
+아래 값은 2026-03-27 기준 live smoke test(`1234567890`)에서 확인한 정규화 결과다.
+
+```json
+{
+  "carrier": "cj",
+  "invoice": "1234567890",
+  "status_code": "91",
+  "status": "배달완료",
+  "timestamp": "2026-03-21 12:22:13",
+  "location": "경기광주오포",
+  "event_count": 3,
+  "recent_events": [
+    {
+      "timestamp": "2026-03-10 03:01:45",
+      "location": "청원HUB",
+      "status_code": "44",
+      "status": "상품이동중"
+    },
+    {
+      "timestamp": "2026-03-21 10:53:19",
+      "location": "경기광주오포",
+      "status_code": "82",
+      "status": "배송출발"
+    },
+    {
+      "timestamp": "2026-03-21 12:22:13",
+      "location": "경기광주오포",
+      "status_code": "91",
+      "status": "배달완료"
+    }
+  ]
+}
+```
+
 CJ는 JSON 응답이므로 `parcelDetailResultMap.resultList` 를 기준으로 상태를 읽는 편이 가장 안정적이다. 문서 예시는 공통 결과 스키마(`carrier`, `invoice`, `status`, `timestamp`, `location`, `event_count`, `recent_events`, 선택적 `status_code`)만 남기고, 담당자 이름이나 휴대폰 번호가 포함될 수 있는 `crgNm` 원문은 그대로 출력하지 않는다.
 
 ## 우체국 예시
@@ -202,6 +238,33 @@ print(json.dumps({
 }, ensure_ascii=False, indent=2))
 PY
 rm -f "$tmp_html"
+```
+
+### 우체국 공개 출력 예시
+
+아래 값은 2026-03-27 기준 live smoke test(`1234567890123`)에서 확인한 정규화 결과다.
+
+```json
+{
+  "carrier": "epost",
+  "invoice": "1234567890123",
+  "status": "배달완료",
+  "timestamp": "2025.12.04 15:13",
+  "location": "제주우편집중국",
+  "event_count": 2,
+  "recent_events": [
+    {
+      "timestamp": "2025.12.04 15:13",
+      "location": "제주우편집중국",
+      "status": "배달준비"
+    },
+    {
+      "timestamp": "2025.12.04 15:13",
+      "location": "제주우편집중국",
+      "status": "배달완료"
+    }
+  ]
+}
 ```
 
 우체국은 HTML 응답이라 기본정보 `table_col` 과 상세 `processTable` 을 파싱해야 한다. 문서 예시는 CJ와 같은 공통 결과 스키마(`carrier`, `invoice`, `status`, `timestamp`, `location`, `event_count`, `recent_events`)만 남기고, 이벤트 location에 섞일 수 있는 `TEL` 번호 조각도 제거한 뒤 수령인/상세 메모 원문은 그대로 출력하지 않는다.
