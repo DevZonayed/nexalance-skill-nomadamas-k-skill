@@ -9,6 +9,14 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
+function readJson(relativePath) {
+  return JSON.parse(read(relativePath));
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function extractQuotedEntries(block, indent) {
   return block
     .split("\n")
@@ -33,6 +41,47 @@ function findRecentEventsBlock(doc, carrier) {
 
   assert.ok(block, `expected ${carrier} recent_events example`);
   return block;
+}
+
+function findJsonFenceAfterLabel(doc, label) {
+  return JSON.parse(findJsonFenceTextAfterLabel(doc, label));
+}
+
+function findJsonFenceTextAfterLabel(doc, label) {
+  const escaped = escapeRegex(label);
+  const match = doc.match(new RegExp(`${escaped}[\\s\\S]*?\\\`\\\`\\\`json\\n([\\s\\S]*?)\\n\\\`\\\`\\\``));
+
+  assert.ok(match, `expected JSON example after "${label}"`);
+  return match[1];
+}
+
+function assertSampleProvenance(doc, sectionLabel, expected, docLabel) {
+  const escapedSectionLabel = escapeRegex(sectionLabel);
+  const escapedVerifiedAt = escapeRegex(expected.verified_at);
+  const escapedInvoice = escapeRegex(expected.invoice);
+
+  assert.match(
+    doc,
+    new RegExp(
+      `${escapedSectionLabel}[\\s\\S]*?아래 값은 ${escapedVerifiedAt} 기준 live smoke test\\(\\x60${escapedInvoice}\\x60\\)에서 확인한 정규화 결과다\\.\\n\\n\\\`\\\`\\\`json`,
+    ),
+    `${docLabel} ${sectionLabel} provenance line must stay pinned to the verified smoke-test date and invoice`,
+  );
+}
+
+function assertSanitizedPublicOutput(output, label) {
+  const serialized = JSON.stringify(output);
+
+  assert.doesNotMatch(serialized, /\bTEL\b/i, `${label} must not leak TEL fragments`);
+  assert.doesNotMatch(
+    serialized,
+    /\d{2,4}[.\-]\d{3,4}[.\-]\d{4}/,
+    `${label} must not leak phone-number-like strings anywhere in the published sample`,
+  );
+  assert.doesNotMatch(serialized, /crgNm/, `${label} must not leak CJ assignee/source fields`);
+  assert.doesNotMatch(serialized, /sender/i, `${label} must not leak sender fields`);
+  assert.doesNotMatch(serialized, /receiver/i, `${label} must not leak receiver fields`);
+  assert.doesNotMatch(serialized, /delivered_to/i, `${label} must not leak delivered_to fields`);
 }
 
 test("root npm test script includes the skill docs regression suite", () => {
@@ -328,4 +377,54 @@ test("delivery-tracking published examples lock a shared normalized non-PII sche
 
   assert.doesNotMatch(skill, /"message":\s*latest\.get\("crgNm"\)/);
   assert.doesNotMatch(featureDoc, /print\(\{\s*"tracking_no"/);
+});
+
+test("delivery-tracking docs publish aligned sample normalized outputs for both carriers", () => {
+  const expectedSamples = readJson(
+    path.join("scripts", "fixtures", "delivery-tracking-public-samples.json"),
+  );
+  const skill = read(path.join("delivery-tracking", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "delivery-tracking.md"));
+  const cjSkillOutput = findJsonFenceAfterLabel(skill, "CJ 공개 출력 예시");
+  const cjFeatureOutput = findJsonFenceAfterLabel(featureDoc, "CJ 공개 출력 예시");
+  const epostSkillOutput = findJsonFenceAfterLabel(skill, "우체국 공개 출력 예시");
+  const epostFeatureOutput = findJsonFenceAfterLabel(featureDoc, "우체국 공개 출력 예시");
+
+  for (const [docLabel, doc] of [
+    ["skill doc", skill],
+    ["feature doc", featureDoc],
+  ]) {
+    for (const [carrier, label] of [
+      ["cj", "CJ 공개 출력 예시"],
+      ["epost", "우체국 공개 출력 예시"],
+    ]) {
+      assert.equal(
+        findJsonFenceTextAfterLabel(doc, label),
+        JSON.stringify(expectedSamples[carrier], null, 2),
+        `${docLabel} ${carrier} sample JSON block must stay byte-for-byte aligned with the checked-in public fixture`,
+      );
+    }
+  }
+  assert.deepEqual(cjSkillOutput, cjFeatureOutput, "CJ sample output must stay aligned across docs");
+  assert.deepEqual(epostSkillOutput, epostFeatureOutput, "ePost sample output must stay aligned across docs");
+  assert.deepEqual(cjSkillOutput, expectedSamples.cj, "CJ sample output must stay pinned to the verified public fixture");
+  assert.deepEqual(epostSkillOutput, expectedSamples.epost, "ePost sample output must stay pinned to the verified public fixture");
+  assertSanitizedPublicOutput(cjSkillOutput, "CJ sample output");
+  assertSanitizedPublicOutput(epostSkillOutput, "ePost sample output");
+});
+
+test("delivery-tracking docs pin sample provenance to the verified smoke-test date and invoice", () => {
+  const expectedProvenance = readJson(
+    path.join("scripts", "fixtures", "delivery-tracking-public-provenance.json"),
+  );
+  const skill = read(path.join("delivery-tracking", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "delivery-tracking.md"));
+
+  for (const [docLabel, doc] of [
+    ["skill doc", skill],
+    ["feature doc", featureDoc],
+  ]) {
+    assertSampleProvenance(doc, "CJ 공개 출력 예시", expectedProvenance.cj, docLabel);
+    assertSampleProvenance(doc, "우체국 공개 출력 예시", expectedProvenance.epost, docLabel);
+  }
 });
