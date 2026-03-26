@@ -9,6 +9,28 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
+function extractQuotedKeys(block, indent) {
+  return [...block.matchAll(new RegExp(`^ {${indent}}"([^"]+)":`, "gm"))].map((match) => match[1]);
+}
+
+function findPrintedObjectBlock(doc, carrier) {
+  const block = [...doc.matchAll(/print\(json\.dumps\(\{\n([\s\S]*?)\n\}, ensure_ascii=False, indent=2\)\)/g)]
+    .map((match) => match[1])
+    .find((candidate) => candidate.includes(`"carrier": "${carrier}"`));
+
+  assert.ok(block, `expected ${carrier} normalized JSON example`);
+  return block;
+}
+
+function findRecentEventsBlock(doc, carrier) {
+  const block = [...doc.matchAll(/normalized_events = \[\n\s*\{\n([\s\S]*?)\n\s*\}\n\s*for [^\n]+ in events\n\]/g)]
+    .map((match) => match[1])
+    .find((candidate) => candidate.includes('"status_code":') === (carrier === "cj"));
+
+  assert.ok(block, `expected ${carrier} recent_events example`);
+  return block;
+}
+
 test("root npm test script includes the skill docs regression suite", () => {
   const packageJson = JSON.parse(read("package.json"));
 
@@ -190,6 +212,14 @@ test("delivery-tracking skill documents official CJ and ePost flows with extensi
 test("delivery-tracking published examples lock a shared normalized non-PII schema", () => {
   const skill = read(path.join("delivery-tracking", "SKILL.md"));
   const featureDoc = read(path.join("docs", "features", "delivery-tracking.md"));
+  const expectedTopLevelKeys = {
+    cj: ["carrier", "invoice", "status_code", "status", "timestamp", "location", "event_count", "recent_events"],
+    epost: ["carrier", "invoice", "status", "timestamp", "location", "event_count", "recent_events"],
+  };
+  const expectedRecentEventKeys = {
+    cj: ["timestamp", "location", "status_code", "status"],
+    epost: ["timestamp", "location", "status"],
+  };
 
   assert.doesNotMatch(skill, /"message":\s*latest\.get\("crgNm"\)/);
   assert.doesNotMatch(
@@ -232,6 +262,38 @@ test("delivery-tracking published examples lock a shared normalized non-PII sche
     assert.doesNotMatch(doc, /"latest_event_location":/);
     assert.doesNotMatch(doc, /"delivered_to":/);
     assert.doesNotMatch(doc, /"delivery_result":/);
+  }
+
+  for (const [label, doc] of [
+    ["skill doc", skill],
+    ["feature doc", featureDoc],
+  ]) {
+    assert.deepEqual(
+      extractQuotedKeys(findPrintedObjectBlock(doc, "cj"), 4),
+      expectedTopLevelKeys.cj,
+      `${label} CJ example must keep the exact normalized top-level key set`,
+    );
+    assert.deepEqual(
+      extractQuotedKeys(findPrintedObjectBlock(doc, "epost"), 4),
+      expectedTopLevelKeys.epost,
+      `${label} ePost example must keep the exact normalized top-level key set`,
+    );
+    assert.deepEqual(
+      extractQuotedKeys(
+        findRecentEventsBlock(doc, "cj"),
+        8,
+      ),
+      expectedRecentEventKeys.cj,
+      `${label} CJ recent_events entries must keep the exact normalized key set`,
+    );
+    assert.deepEqual(
+      extractQuotedKeys(
+        findRecentEventsBlock(doc, "epost"),
+        8,
+      ),
+      expectedRecentEventKeys.epost,
+      `${label} ePost recent_events entries must keep the exact normalized key set`,
+    );
   }
 
   assert.doesNotMatch(skill, /"message":\s*latest\.get\("crgNm"\)/);
