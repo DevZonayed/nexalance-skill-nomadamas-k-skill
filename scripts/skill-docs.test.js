@@ -13,6 +13,10 @@ function readJson(relativePath) {
   return JSON.parse(read(relativePath));
 }
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function extractQuotedEntries(block, indent) {
   return block
     .split("\n")
@@ -40,11 +44,25 @@ function findRecentEventsBlock(doc, carrier) {
 }
 
 function findJsonFenceAfterLabel(doc, label) {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegex(label);
   const match = doc.match(new RegExp(`${escaped}[\\s\\S]*?\\\`\\\`\\\`json\\n([\\s\\S]*?)\\n\\\`\\\`\\\``));
 
   assert.ok(match, `expected JSON example after "${label}"`);
   return JSON.parse(match[1]);
+}
+
+function assertSampleProvenance(doc, sectionLabel, expected, docLabel) {
+  const escapedSectionLabel = escapeRegex(sectionLabel);
+  const escapedVerifiedAt = escapeRegex(expected.verified_at);
+  const escapedInvoice = escapeRegex(expected.invoice);
+
+  assert.match(
+    doc,
+    new RegExp(
+      `${escapedSectionLabel}[\\s\\S]*?아래 값은 ${escapedVerifiedAt} 기준 live smoke test\\(\\x60${escapedInvoice}\\x60\\)에서 확인한 정규화 결과다\\.\\n\\n\\\`\\\`\\\`json`,
+    ),
+    `${docLabel} ${sectionLabel} provenance line must stay pinned to the verified smoke-test date and invoice`,
+  );
 }
 
 function assertSanitizedPublicOutput(output, label) {
@@ -374,4 +392,20 @@ test("delivery-tracking docs publish aligned sample normalized outputs for both 
   assert.deepEqual(epostSkillOutput, expectedSamples.epost, "ePost sample output must stay pinned to the verified public fixture");
   assertSanitizedPublicOutput(cjSkillOutput, "CJ sample output");
   assertSanitizedPublicOutput(epostSkillOutput, "ePost sample output");
+});
+
+test("delivery-tracking docs pin sample provenance to the verified smoke-test date and invoice", () => {
+  const expectedProvenance = readJson(
+    path.join("scripts", "fixtures", "delivery-tracking-public-provenance.json"),
+  );
+  const skill = read(path.join("delivery-tracking", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "delivery-tracking.md"));
+
+  for (const [docLabel, doc] of [
+    ["skill doc", skill],
+    ["feature doc", featureDoc],
+  ]) {
+    assertSampleProvenance(doc, "CJ 공개 출력 예시", expectedProvenance.cj, docLabel);
+    assertSampleProvenance(doc, "우체국 공개 출력 예시", expectedProvenance.epost, docLabel);
+  }
 });
