@@ -263,16 +263,18 @@ rm -f "$tmp_html"
 
 ### 3. Normalize for humans
 
-응답 원문을 그대로 붙이지 말고 아래 공통 필드로 요약한다.
+응답 원문을 그대로 붙이지 말고 아래 공통 결과 스키마로 요약한다.
 
-- 택배사
-- 송장번호
-- 현재 상태
-- 마지막 이벤트 시각
-- 마지막 이벤트 위치
-- 전체 이벤트 수
-- 최근 3~5개 이벤트
-- 필요할 때만 원본 상태 코드(`status_code`)
+#### 공통 결과 스키마
+
+- `carrier`: 택배사 식별자 (`cj` 또는 `epost`)
+- `invoice`: 정규화된 송장번호
+- `status`: 현재 배송 상태
+- `timestamp`: 마지막 이벤트 시각
+- `location`: 마지막 이벤트 위치
+- `event_count`: 전체 이벤트 수
+- `recent_events`: 최근 최대 3개 이벤트 목록
+- `status_code`: 필요할 때만 남기는 원본 상태 코드 (현재는 CJ 예시에서만 사용)
 
 ### 4. Retry and fallback policy
 

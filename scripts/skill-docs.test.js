@@ -199,7 +199,17 @@ test("delivery-tracking published examples lock a shared normalized non-PII sche
 
   for (const doc of [skill, featureDoc]) {
     assert.match(doc, /공통 포맷/);
+    assert.match(doc, /공통 결과 스키마/);
     assert.match(doc, /최근 이벤트/);
+    assert.match(doc, /`carrier`/);
+    assert.match(doc, /`invoice`/);
+    assert.match(doc, /`status`/);
+    assert.match(doc, /`timestamp`/);
+    assert.match(doc, /`location`/);
+    assert.match(doc, /`event_count`/);
+    assert.match(doc, /`recent_events`/);
+    assert.match(doc, /최근 최대 3개 이벤트/);
+    assert.doesNotMatch(doc, /최근 3~5개 이벤트/);
     assert.match(doc, /"invoice":\s*payload\["parcelDetailResultMap"\]\["paramInvcNo"\]/);
     assert.match(doc, /"status_code":\s*latest\.get\("crgSt"\)/);
     assert.match(doc, /"status":\s*status_map\.get\(latest\.get\("crgSt"\),/);
