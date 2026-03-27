@@ -194,6 +194,9 @@ test("ktx-booking docs document the helper-based live Korail workflow", () => {
     assert.match(doc, /python3 scripts\/ktx_booking\.py reserve/);
     assert.match(doc, /python3 scripts\/ktx_booking\.py reservations/);
     assert.match(doc, /python3 scripts\/ktx_booking\.py cancel/);
+    assert.match(doc, /--include-no-seats/);
+    assert.match(doc, /--include-waiting-list/);
+    assert.match(doc, /--try-waiting/);
     assert.match(doc, /sops exec-env/);
     assert.match(doc, /anti-bot|Dynapath|x-dynapath-m-token/i);
     assert.match(doc, /결제(까지)?는 자동화하지 않는다|결제는 제외/);

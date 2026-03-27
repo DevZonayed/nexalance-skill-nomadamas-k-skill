@@ -60,6 +60,8 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
   'python3 scripts/ktx_booking.py search 서울 부산 20260328 090000 --limit 5'
 ```
 
+좌석이 없는 열차까지 같이 보고 싶으면 `--include-no-seats`, 예약 대기 가능 열차도 같이 보고 싶으면 `--include-waiting-list` 를 붙인다.
+
 예약:
 
 ```bash
@@ -67,6 +69,8 @@ SOPS_AGE_KEY_FILE="$HOME/.config/k-skill/age/keys.txt" \
 sops exec-env "$HOME/.config/k-skill/secrets.env" \
   'python3 scripts/ktx_booking.py reserve 서울 부산 20260328 090000 --train-index 1 --seat-option general-first'
 ```
+
+좌석이 없을 때 예약 대기까지 시도하려면 조회 단계에서도 `--include-waiting-list` 를 켜고, 예약 단계에서 `--try-waiting` 을 추가한다.
 
 예약 확인:
 

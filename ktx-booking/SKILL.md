@@ -85,6 +85,8 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
   'python3 scripts/ktx_booking.py search 서울 부산 20260328 090000 --limit 5'
 ```
 
+좌석이 없는 열차도 후보에 포함하려면 `--include-no-seats`, 예약 대기 가능한 열차도 같이 보고 싶으면 `--include-waiting-list` 를 붙인다.
+
 ### 3. Present the shortlist
 
 예매 전에 항상 아래를 확인한다.
@@ -106,6 +108,7 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
 ```
 
 응답에는 예약번호, 운임, 구입기한이 포함된다. **결제는 자동화하지 않는다.**
+좌석이 없을 때는 조회 단계에서 `--include-waiting-list` 를 켜고 예약 단계에서 `--try-waiting` 으로 예약 대기까지 시도할 수 있다.
 
 ### 5. Inspect or cancel
 
