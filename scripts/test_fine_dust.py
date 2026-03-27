@@ -141,6 +141,56 @@ class FineDustTests(unittest.TestCase):
         fallback_params = recorded_calls[1][1]
         self.assertEqual(fallback_params["addr"], "서울 강남구")
 
+    def test_cli_json_report_marks_region_fallback_when_nearby_lookup_is_empty(self):
+        stdout = io.StringIO()
+
+        def fake_fetch_json(url, params):
+            if url.endswith("/getNearbyMsrstnList"):
+                return {"response": {"body": {"items": []}}}
+            if url.endswith("/getMsrstnList"):
+                return {"response": {"body": {"items": [{"stationName": "강남구", "addr": "서울 강남구 학동로 426"}]}}}
+            if url.endswith("/getMsrstnAcctoRltmMesureDnsty"):
+                return {
+                    "response": {
+                        "body": {
+                            "items": [
+                                {
+                                    "stationName": "강남구",
+                                    "dataTime": "2026-03-27 21:00",
+                                    "pm10Value": "42",
+                                    "pm10Grade": "2",
+                                    "pm25Value": "19",
+                                    "pm25Grade": "2",
+                                    "khaiGrade": "2",
+                                }
+                            ]
+                        }
+                    }
+                }
+            raise AssertionError(f"unexpected URL: {url}")
+
+        with (
+            redirect_stdout(stdout),
+            mock.patch.object(fine_dust, "get_required_secret", return_value="test-secret"),
+            mock.patch.object(fine_dust, "fetch_json", side_effect=fake_fetch_json),
+        ):
+            fine_dust.main(
+                [
+                    "report",
+                    "--lat",
+                    "37.5665",
+                    "--lon",
+                    "126.9780",
+                    "--region-hint",
+                    "서울 강남구",
+                    "--json",
+                ]
+            )
+
+        rendered = json.loads(stdout.getvalue())
+        self.assertEqual(rendered["station_name"], "강남구")
+        self.assertEqual(rendered["lookup_mode"], "fallback")
+
 
 if __name__ == "__main__":
     unittest.main()

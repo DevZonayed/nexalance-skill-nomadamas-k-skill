@@ -264,6 +264,7 @@ def build_report(
     lon: float | None = None,
     region_hint: str | None = None,
     station_name: str | None = None,
+    lookup_mode: str | None = None,
 ) -> dict:
     station = pick_station(
         station_items,
@@ -274,12 +275,12 @@ def build_report(
     )
     measurement = find_measurement(measurement_items, station["stationName"])
 
-    lookup_mode = "coordinates" if lat is not None and lon is not None else "fallback"
+    resolved_lookup_mode = lookup_mode or ("coordinates" if lat is not None and lon is not None else "fallback")
 
     return {
         "station_name": station["stationName"],
         "station_address": station.get("addr"),
-        "lookup_mode": lookup_mode,
+        "lookup_mode": resolved_lookup_mode,
         "measured_at": measurement.get("dataTime"),
         "pm10": {
             "value": str(measurement.get("pm10Value", "-")),
@@ -328,9 +329,9 @@ def fetch_json(url: str, params: dict[str, object]) -> dict:
         return json.load(response)
 
 
-def fetch_station_payload(args: argparse.Namespace) -> dict:
+def fetch_station_lookup(args: argparse.Namespace) -> tuple[dict, str]:
     if args.station_file:
-        return load_json_file(args.station_file)
+        return load_json_file(args.station_file), "coordinates" if args.lat is not None and args.lon is not None else "fallback"
 
     service_key = get_required_secret()
     common = {
@@ -352,19 +353,27 @@ def fetch_station_payload(args: argparse.Namespace) -> dict:
             },
         )
         if extract_items(nearby_payload):
-            return nearby_payload
+            return nearby_payload, "coordinates"
 
     if args.region_hint or args.station_name:
-        return fetch_json(
-            f"{STATION_SERVICE_URL}/getMsrstnList",
-            {
-                **common,
-                "addr": args.region_hint,
-                "stationName": args.station_name,
-            },
+        return (
+            fetch_json(
+                f"{STATION_SERVICE_URL}/getMsrstnList",
+                {
+                    **common,
+                    "addr": args.region_hint,
+                    "stationName": args.station_name,
+                },
+            ),
+            "fallback",
         )
 
     raise SystemExit("위도/경도 또는 region fallback 이 필요합니다.")
+
+
+def fetch_station_payload(args: argparse.Namespace) -> dict:
+    payload, _ = fetch_station_lookup(args)
+    return payload
 
 
 def fetch_measurement_payload(args: argparse.Namespace, station_name: str) -> dict:
@@ -401,7 +410,7 @@ def render_text(report: dict) -> str:
 
 
 def command_report(args: argparse.Namespace) -> None:
-    station_payload = fetch_station_payload(args)
+    station_payload, lookup_mode = fetch_station_lookup(args)
     station_items = extract_items(station_payload)
     station = pick_station(
         station_items,
@@ -419,6 +428,7 @@ def command_report(args: argparse.Namespace) -> None:
         lon=args.lon,
         region_hint=args.region_hint,
         station_name=station["stationName"],
+        lookup_mode=lookup_mode,
     )
 
     if args.json:
