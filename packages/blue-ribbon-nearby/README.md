@@ -20,6 +20,7 @@ npm install
 
 - 유저 위치는 자동으로 추적하지 않습니다.
 - 먼저 현재 위치를 묻고, 받은 동네/역명/랜드마크/위도·경도를 사용하세요.
+- 대표 랜드마크는 가장 가까운 공식 Blue Ribbon zone alias 로 확장합니다. 예: `코엑스` → `삼성동/대치동`
 - 블루리본 인증 맛집만 남기도록 `ribbonType=RIBBON_THREE,RIBBON_TWO,RIBBON_ONE` 필터를 기본 적용합니다.
 
 ## 사용 예시

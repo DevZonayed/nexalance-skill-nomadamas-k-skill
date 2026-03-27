@@ -29,6 +29,8 @@
 - 역명/랜드마크: `강남역`, `서울역`, `코엑스`
 - 좌표: `37.573713, 126.978338`
 
+랜드마크는 내부 alias 로 가장 가까운 공식 Blue Ribbon zone 이름에 매칭합니다. 예: `코엑스` → `삼성동/대치동`
+
 맛집 문의는 기본적으로 `blue-ribbon-nearby` 스킬부터 검토합니다.
 
 ## 공식 Blue Ribbon 표면
@@ -54,6 +56,7 @@
 
 1. 유저에게 반드시 현재 위치를 묻습니다.
 2. 동네/역명/랜드마크를 받으면 공식 `search/zone` 목록에서 가장 가까운 zone 후보를 찾습니다.
+   - 공식 zone 이름이 아닌 대표 랜드마크는 먼저 nearest zone alias 로 확장합니다. 예: `코엑스` → `삼성동/대치동`
 3. 좌표를 받으면 nearby bounding box 를 계산합니다.
 4. 공식 `/restaurants/map` endpoint 를 `isAround=true`, `ribbon=true`, `ribbonType=RIBBON_THREE,RIBBON_TWO,RIBBON_ONE`, `sort=distance` 로 조회합니다.
 5. 거리순 상위 결과를 3~5개 정리합니다.

@@ -3,12 +3,13 @@ const LOCATION_SUFFIX_PATTERN = /(역|동|구|시|군|읍|면|리)$/u;
 const NON_WORD_PATTERN = /[^\p{L}\p{N}]+/gu;
 const ZONE_LINK_PATTERN =
   /href="([^"]*\/search\?[^"]*zone1=[^"]*zone2=[^"]*zone2Lat=[^"]*zone2Lng=[^"]*)"/giu;
+const COEX_ZONE_ALIASES = ["삼성동/대치동", "삼성동", "대치동", "봉은사", "봉은사역", "삼성역"];
 const LOCATION_QUERY_ALIASES = new Map(
   Object.entries({
-    코엑스: ["삼성동/대치동", "삼성동", "대치동", "봉은사", "봉은사역", "삼성역"],
-    스타필드코엑스: ["삼성동/대치동", "삼성동", "대치동", "봉은사", "봉은사역", "삼성역"],
-    coex: ["삼성동/대치동", "삼성동", "대치동", "봉은사", "봉은사역", "삼성역"],
-    starfieldcoex: ["삼성동/대치동", "삼성동", "대치동", "봉은사", "봉은사역", "삼성역"]
+    코엑스: COEX_ZONE_ALIASES,
+    스타필드코엑스: COEX_ZONE_ALIASES,
+    coex: COEX_ZONE_ALIASES,
+    starfieldcoex: COEX_ZONE_ALIASES
   }).map(([query, aliases]) => [normalizeText(query), aliases])
 );
 
@@ -29,8 +30,7 @@ function normalizeText(value) {
 }
 
 function expandLocationQueryAliases(value) {
-  const rawValue = String(value || "").trim();
-  const normalizedValue = normalizeText(rawValue);
+  const normalizedValue = normalizeText(value);
   const expanded = [String(value || "")];
 
   for (const [alias, targets] of LOCATION_QUERY_ALIASES.entries()) {

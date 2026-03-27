@@ -82,7 +82,6 @@ test("normalizeNearbyItem exposes the public restaurant summary with computed di
   assert.deepEqual(item.foodTypes.slice(0, 2), ["중식", "광동식중식"]);
 });
 
-
 test("searchNearbyByLocationQuery resolves documented landmark aliases like 코엑스", async () => {
   const originalFetch = global.fetch;
 
@@ -149,7 +148,6 @@ test("searchNearbyByLocationQuery resolves a zone match, fetches the official ne
     global.fetch = originalFetch;
   }
 });
-
 
 function makeResponse(ok, body, contentType) {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), {
