@@ -216,7 +216,11 @@ test("ktx-booking helper python regression tests pass", () => {
   const result = childProcess.spawnSync(
     "python3",
     ["-m", "unittest", "discover", "-s", "scripts", "-p", "test_ktx_booking.py"],
-    { cwd: repoRoot, encoding: "utf8" },
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: { ...process.env, PYTHONNOUSERSITE: "1" },
+    },
   );
 
   assert.equal(
