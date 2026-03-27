@@ -69,6 +69,25 @@ class FineDustTests(unittest.TestCase):
         self.assertEqual(report["pm25"], {"value": "19", "grade": "보통"})
         self.assertEqual(report["measured_at"], "2026-03-27 21:00")
 
+    def test_build_report_marks_khai_grade_unknown_when_api_omits_it(self):
+        report = fine_dust.build_report(
+            station_items=[{"stationName": "중구", "addr": "서울 중구 서소문로 124"}],
+            measurement_items=[
+                {
+                    "stationName": "중구",
+                    "dataTime": "2026-03-27 21:00",
+                    "pm10Value": "42",
+                    "pm10Grade": "2",
+                    "pm25Value": "19",
+                    "pm25Grade": "2",
+                    "khaiGrade": None,
+                }
+            ],
+            station_name="중구",
+        )
+
+        self.assertEqual(report["khai_grade"], "정보없음")
+
     def test_cli_report_supports_fixture_inputs(self):
         station_path = FIXTURES / "fine-dust-stations.json"
         measurement_path = FIXTURES / "fine-dust-measurements.json"
@@ -190,6 +209,48 @@ class FineDustTests(unittest.TestCase):
         rendered = json.loads(stdout.getvalue())
         self.assertEqual(rendered["station_name"], "강남구")
         self.assertEqual(rendered["lookup_mode"], "fallback")
+
+    def test_cli_json_report_uses_station_name_directly_when_station_lookup_is_empty(self):
+        stdout = io.StringIO()
+        recorded_calls = []
+
+        def fake_fetch_json(url, params):
+            recorded_calls.append((url, params))
+            if url.endswith("/getMsrstnList"):
+                return {"response": {"body": {"items": []}}}
+            if url.endswith("/getMsrstnAcctoRltmMesureDnsty"):
+                return {
+                    "response": {
+                        "body": {
+                            "items": [
+                                {
+                                    "stationName": "중구",
+                                    "dataTime": "2026-03-27 21:00",
+                                    "pm10Value": "42",
+                                    "pm10Grade": "2",
+                                    "pm25Value": "19",
+                                    "pm25Grade": "2",
+                                    "khaiGrade": "2",
+                                }
+                            ]
+                        }
+                    }
+                }
+            raise AssertionError(f"unexpected URL: {url}")
+
+        with (
+            redirect_stdout(stdout),
+            mock.patch.object(fine_dust, "get_required_secret", return_value="test-secret"),
+            mock.patch.object(fine_dust, "fetch_json", side_effect=fake_fetch_json),
+        ):
+            fine_dust.main(["report", "--station-name", "중구", "--json"])
+
+        rendered = json.loads(stdout.getvalue())
+        self.assertEqual(rendered["station_name"], "중구")
+        self.assertIsNone(rendered["station_address"])
+        self.assertEqual(rendered["lookup_mode"], "fallback")
+        self.assertEqual([url.rsplit("/", 1)[-1] for url, _ in recorded_calls], ["getMsrstnList", "getMsrstnAcctoRltmMesureDnsty"])
+        self.assertEqual(recorded_calls[1][1]["stationName"], "중구")
 
 
 if __name__ == "__main__":

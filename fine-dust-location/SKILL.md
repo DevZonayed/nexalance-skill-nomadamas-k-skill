@@ -94,6 +94,8 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
 2. 지역명/행정구역 → `getMsrstnList`
 3. 측정소명 직접 지정 → `getMsrstnAcctoRltmMesureDnsty`
 
+`getMsrstnList` 가 빈 응답이어도 `--station-name` 이 있으면 helper 는 같은 이름으로 `getMsrstnAcctoRltmMesureDnsty` 를 직접 재시도한다.
+
 ### 4. Query the official real-time measurement API
 
 선택한 가까운 측정소 이름으로 대기오염정보 API `getMsrstnAcctoRltmMesureDnsty` 를 호출해 PM10/PM2.5 와 등급을 가져온다.
@@ -134,6 +136,7 @@ python3 scripts/fine_dust.py report \
 - PM10 값과 등급
 - PM2.5 값과 등급
 - 좌표 기반 조회인지, 지역 fallback인지
+- `khaiGrade` 가 비어 있으면 통합대기등급은 `정보없음`
 
 ## Done when
 

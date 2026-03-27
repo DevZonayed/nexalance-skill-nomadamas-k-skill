@@ -89,6 +89,7 @@ python3 scripts/fine_dust.py report \
 
 - 위치 권한이 없으면 지역명/행정구역을 먼저 받습니다
 - 지역명도 없으면 측정소명을 직접 받습니다
+- 측정소 목록 API가 빈 응답이어도 `--station-name` 이 있으면 같은 이름으로 실시간 측정 API를 직접 재시도합니다
 - `getNearbyMsrstnList` 결과가 비면 `getMsrstnList` 로 재시도합니다
 - nearby 응답은 입력 TM 좌표와의 거리 기준으로 정렬되므로 첫 측정소를 우선 사용합니다
 
@@ -96,4 +97,5 @@ python3 scripts/fine_dust.py report \
 
 - 실시간 수치라 조회 시각을 같이 적어야 합니다
 - PM10/PM2.5 값이 `-` 이거나 비정상이면 등급도 함께 재확인합니다
+- API 가 `khaiGrade` 를 비워 보내면 통합대기등급은 `정보없음` 으로 표시합니다
 - 위치 기반이라고 해도 실제 기준은 “가까운 측정소” 이므로 주소 중심점과 오차가 있을 수 있습니다

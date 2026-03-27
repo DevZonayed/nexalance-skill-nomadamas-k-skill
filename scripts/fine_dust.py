@@ -221,6 +221,29 @@ def pick_station(
     return station_items[0]
 
 
+def resolve_station(
+    station_items: list[dict],
+    *,
+    lat: float | None = None,
+    lon: float | None = None,
+    region_hint: str | None = None,
+    station_name: str | None = None,
+) -> dict:
+    if station_items:
+        return pick_station(
+            station_items,
+            lat=lat,
+            lon=lon,
+            region_hint=region_hint,
+            station_name=station_name,
+        )
+
+    if station_name:
+        return {"stationName": station_name, "addr": None}
+
+    raise SystemExit("측정소 후보가 없습니다.")
+
+
 def find_measurement(measurement_items: list[dict], station_name: str) -> dict:
     exact_match = next((item for item in measurement_items if item.get("stationName") == station_name), None)
     if exact_match:
@@ -265,8 +288,9 @@ def build_report(
     region_hint: str | None = None,
     station_name: str | None = None,
     lookup_mode: str | None = None,
+    selected_station: dict | None = None,
 ) -> dict:
-    station = pick_station(
+    station = selected_station or resolve_station(
         station_items,
         lat=lat,
         lon=lon,
@@ -298,7 +322,9 @@ def build_report(
                 value=measurement.get("pm25Value"),
             ),
         },
-        "khai_grade": grade_to_label(
+        "khai_grade": "정보없음"
+        if measurement.get("khaiGrade") in (None, "")
+        else grade_to_label(
             measurement.get("khaiGrade"),
             pollutant="pm10",
             value=measurement.get("pm10Value"),
@@ -399,7 +425,7 @@ def render_text(report: dict) -> str:
     return "\n".join(
         [
             f"측정소: {report['station_name']}",
-            f"주소: {report['station_address']}",
+            f"주소: {report['station_address'] or '-'}",
             f"조회 시각: {report['measured_at']}",
             f"조회 방식: {report['lookup_mode']}",
             f"PM10: {report['pm10']['value']} ({report['pm10']['grade']})",
@@ -412,7 +438,7 @@ def render_text(report: dict) -> str:
 def command_report(args: argparse.Namespace) -> None:
     station_payload, lookup_mode = fetch_station_lookup(args)
     station_items = extract_items(station_payload)
-    station = pick_station(
+    station = resolve_station(
         station_items,
         lat=args.lat,
         lon=args.lon,
@@ -429,6 +455,7 @@ def command_report(args: argparse.Namespace) -> None:
         region_hint=args.region_hint,
         station_name=station["stationName"],
         lookup_mode=lookup_mode,
+        selected_station=station,
     )
 
     if args.json:
