@@ -532,3 +532,13 @@ test("blue-ribbon-nearby skill documents mandatory location prompting and offici
     assert.match(doc, /blue-ribbon-nearby|근처 블루리본 맛집/u);
   }
 });
+
+test("blue-ribbon-nearby package README stays aligned with the location-first and official-surface guidance", () => {
+  const packageReadme = read(path.join("packages", "blue-ribbon-nearby", "README.md"));
+
+  assert.match(packageReadme, /먼저 현재 위치를 묻/u);
+  assert.match(packageReadme, /코엑스.*삼성동\/대치동/u);
+  assert.match(packageReadme, /https:\/\/www\.bluer\.co\.kr\/search\/zone/);
+  assert.match(packageReadme, /https:\/\/www\.bluer\.co\.kr\/restaurants\/map/);
+  assert.match(packageReadme, /searchNearbyByLocationQuery/);
+});
