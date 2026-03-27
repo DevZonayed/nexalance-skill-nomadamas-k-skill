@@ -48,6 +48,7 @@ npx --yes skills add <owner/repo> \
   --skill kbo-results \
   --skill lotto-results \
   --skill kakaotalk-mac \
+  --skill blue-ribbon-nearby \
   --skill zipcode-search \
   --skill delivery-tracking
 ```

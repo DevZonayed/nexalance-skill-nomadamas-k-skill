@@ -1,0 +1,71 @@
+# blue-ribbon-nearby
+
+Blue Ribbon Survey 공식 표면을 사용해 근처 블루리본 맛집을 찾는 Node.js 패키지입니다.
+
+## 설치
+
+배포 후:
+
+```bash
+npm install blue-ribbon-nearby
+```
+
+이 저장소에서 개발할 때:
+
+```bash
+npm install
+```
+
+## 사용 원칙
+
+- 유저 위치는 자동으로 추적하지 않습니다.
+- 먼저 현재 위치를 묻고, 받은 동네/역명/랜드마크/위도·경도를 사용하세요.
+- 블루리본 인증 맛집만 남기도록 `ribbonType=RIBBON_THREE,RIBBON_TWO,RIBBON_ONE` 필터를 기본 적용합니다.
+
+## 사용 예시
+
+```js
+const { searchNearbyByLocationQuery } = require("blue-ribbon-nearby");
+
+async function main() {
+  const result = await searchNearbyByLocationQuery("광화문", {
+    distanceMeters: 1000,
+    limit: 5
+  });
+
+  console.log(result.anchor);
+  console.log(result.items);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+```
+
+## Live smoke snapshot
+
+2026-03-27 에 `광화문`, `distanceMeters=1000`, `limit=5` 로 실제 호출했을 때 상위 결과 예시는 아래와 같았습니다.
+
+```json
+{
+  "anchor": {
+    "zone1": "서울 강북",
+    "zone2": "광화문/종로2가"
+  },
+  "items": [
+    { "name": "미치루스시", "ribbonType": "RIBBON_ONE", "ribbonCount": 1, "distanceMeters": 61 },
+    { "name": "한성옥", "ribbonType": "RIBBON_ONE", "ribbonCount": 1, "distanceMeters": 170 },
+    { "name": "청진옥", "ribbonType": "RIBBON_TWO", "ribbonCount": 2, "distanceMeters": 242 }
+  ]
+}
+```
+
+## 공개 API
+
+- `fetchZoneCatalog()`
+- `parseZoneCatalogHtml(html)`
+- `findZoneMatches(locationQuery, zones, options?)`
+- `buildNearbySearchParams(options)`
+- `searchNearbyByLocationQuery(locationQuery, options?)`
+- `searchNearbyByCoordinates(options)`
