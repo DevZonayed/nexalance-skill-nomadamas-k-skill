@@ -15,6 +15,10 @@ const DEFAULT_BROWSER_HEADERS = {
   "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 }
 
+function selectPickupPreferredProduct(products) {
+  return products.find((product) => product.pickupAvailable) || products[0]
+}
+
 async function requestJson(url, options = {}) {
   const fetchImpl = options.fetchImpl || global.fetch
 
@@ -141,7 +145,7 @@ async function lookupStoreProductAvailability(options = {}) {
   ])
 
   const selectedStore = storeResult.items[0]
-  const selectedProduct = productResult.items[0]
+  const selectedProduct = selectPickupPreferredProduct(productResult.items)
   const [storeDetailPayload, pickupStock, onlineStock] = await Promise.all([
     getStoreDetail(selectedStore.strCd, options),
     getStorePickupStock({ pdNo: selectedProduct.pdNo, strCd: selectedStore.strCd }, options),

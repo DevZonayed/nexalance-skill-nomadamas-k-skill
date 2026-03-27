@@ -87,6 +87,57 @@ const liveLookupSearchGoodsPayload = {
     ]
   }
 }
+const pickupSelectionSearchGoodsPayload = {
+  resultSet: {
+    result: [
+      {
+        totalSize: 2,
+        resultDocuments: [
+          {
+            pdNo: "B1",
+            MASTER_PD_NO: "1049275",
+            MAPP_BOX_PD_NO: "1049275",
+            pdNm: "VT 리들샷 100",
+            exhPdNm: "VT 리들샷 100",
+            pdPrc: "3000",
+            brndNm: "VT>00044>VT",
+            avgStscVal: "4.8",
+            revwCnt: "500",
+            newPdYn: "N",
+            massOrPsblYn: "Y",
+            pdsOrPsblYn: "Y",
+            pkupOrPsblYn: "N",
+            QUICK_OR_PSBL_YN: "Y",
+            totOrQy: "219485",
+            exhLargeCtgrNm: "뷰티/위생",
+            exhMiddleCtgrNm: "스킨케어",
+            exhSmallCtgrNm: "에센스/세럼/앰플"
+          },
+          {
+            pdNo: "1049275",
+            MASTER_PD_NO: "",
+            MAPP_BOX_PD_NO: "1049275",
+            pdNm: "VT 리들샷 100",
+            exhPdNm: "VT 리들샷 100",
+            pdPrc: "3000",
+            brndNm: "VT>00044>VT",
+            avgStscVal: "4.8",
+            revwCnt: "100",
+            newPdYn: "N",
+            massOrPsblYn: "Y",
+            pdsOrPsblYn: "Y",
+            pkupOrPsblYn: "Y",
+            QUICK_OR_PSBL_YN: "Y",
+            totOrQy: "219485",
+            exhLargeCtgrNm: "뷰티/위생",
+            exhMiddleCtgrNm: "스킨케어",
+            exhSmallCtgrNm: "에센스/세럼/앰플"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 test("normalizeStoreSearchResponse prefers the closest exact-name store match", () => {
   const items = normalizeStoreSearchResponse(storeSearchPayload, "강남역2호점")
@@ -253,6 +304,74 @@ test("lookupStoreProductAvailability falls back to pdNo when live SearchGoods re
     assert.equal(availability.selectedProduct.pdNo, "1049275")
     assert.equal(availability.selectedProduct.onldPdNo, "1049275")
     assert.equal(availability.onlineStock.quantity, 13047)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test("lookupStoreProductAvailability prefers pickup-capable products over higher-ranked non-pickup matches", async () => {
+  const originalFetch = global.fetch
+
+  global.fetch = async (url, init = {}) => {
+    if (String(url).includes("/api/ms/msg/selStr") && !String(url).includes("selStrInfo")) {
+      return makeResponse(storeSearchPayload)
+    }
+
+    if (String(url).includes("/ssn/search/SearchGoods")) {
+      return makeResponse(pickupSelectionSearchGoodsPayload)
+    }
+
+    if (String(url).includes("/api/dl/dla-api/selStrInfo")) {
+      return makeResponse(storeDetailPayload)
+    }
+
+    if (String(url).includes("/api/pd/pdh/selStrPkupStck")) {
+      const requestBody = JSON.parse(init.body)
+      assert.deepEqual(requestBody, [
+        {
+          pdNo: "1049275",
+          strCd: "10224"
+        }
+      ])
+
+      return makeResponse({
+        data: [
+          {
+            pdNo: "1049275",
+            strCd: "10224",
+            stck: "7",
+            sleStsCd: "1"
+          }
+        ]
+      })
+    }
+
+    if (String(url).includes("/api/pdo/selOnlStck")) {
+      const requestBody = JSON.parse(init.body)
+      assert.deepEqual(requestBody, [
+        {
+          pdNo: "1049275",
+          onldPdNo: "1049275"
+        }
+      ])
+
+      return makeResponse(onlineStockPayload)
+    }
+
+    return new Response("not found", { status: 404 })
+  }
+
+  try {
+    const availability = await lookupStoreProductAvailability({
+      storeQuery: "강남역2호점",
+      productQuery: "VT 리들샷 100"
+    })
+
+    assert.equal(availability.productCandidates[0].pdNo, "B1")
+    assert.equal(availability.productCandidates[1].pdNo, "1049275")
+    assert.equal(availability.selectedProduct.pdNo, "1049275")
+    assert.equal(availability.selectedProduct.pickupAvailable, true)
+    assert.equal(availability.pickupStock.quantity, 7)
   } finally {
     global.fetch = originalFetch
   }
