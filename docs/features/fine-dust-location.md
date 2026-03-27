@@ -18,15 +18,16 @@
 
 ## 입력값
 
-- 우선: 현재 위치 위도/경도
+- 우선: 현재 위치 위도/경도(WGS84)
 - fallback: 지역명/행정구역 힌트 또는 측정소명
 
 ## 기본 흐름
 
-1. 좌표가 있으면 측정소정보 API `getNearbyMsrstnList` 로 가까운 측정소를 찾습니다.
-2. 좌표를 못 받거나 nearby 결과가 비면 측정소정보 API `getMsrstnList` 로 지역명/행정구역 fallback을 사용합니다.
-3. 선택된 측정소 이름으로 대기오염정보 API `getMsrstnAcctoRltmMesureDnsty` 를 호출합니다.
-4. PM10, PM2.5, 등급, 조회 시점/조회 시각을 함께 요약합니다.
+1. 좌표가 있으면 입력 위도/경도(WGS84)를 에어코리아 nearby 조회가 요구하는 **TM 좌표(중부원점)** 로 먼저 변환합니다.
+2. 변환된 `tmX`/`tmY` 로 측정소정보 API `getNearbyMsrstnList` 를 호출해 가까운 측정소를 찾습니다.
+3. 좌표를 못 받거나 nearby 결과가 비면 측정소정보 API `getMsrstnList` 로 지역명/행정구역 fallback을 사용합니다.
+4. 선택된 측정소 이름으로 대기오염정보 API `getMsrstnAcctoRltmMesureDnsty` 를 호출합니다.
+5. PM10, PM2.5, 등급, 조회 시점/조회 시각을 함께 요약합니다.
 
 ## 예시
 
@@ -40,9 +41,11 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
     --data-urlencode "returnType=json" \
     --data-urlencode "numOfRows=10" \
     --data-urlencode "pageNo=1" \
-    --data-urlencode "dmX=37.5665" \
-    --data-urlencode "dmY=126.9780"'
+    --data-urlencode "tmX=198245.053183" \
+    --data-urlencode "tmY=451586.837879"'
 ```
+
+`getNearbyMsrstnList` 는 WGS84 위도/경도를 직접 받지 않습니다. helper script 는 `37.5665, 126.9780` 같은 입력을 위 값처럼 TM 좌표로 변환한 뒤 nearby API 를 호출합니다. 같은 기술문서에는 읍면동 기준 `getTMStdrCrdnt` 도 정의돼 있지만, 이 스킬은 사용자 위치 입력이 WGS84 라는 점 때문에 로컬 변환 후 `tmX`/`tmY` 를 사용합니다.
 
 지역 fallback:
 
@@ -87,6 +90,7 @@ python3 scripts/fine_dust.py report \
 - 위치 권한이 없으면 지역명/행정구역을 먼저 받습니다
 - 지역명도 없으면 측정소명을 직접 받습니다
 - `getNearbyMsrstnList` 결과가 비면 `getMsrstnList` 로 재시도합니다
+- nearby 응답은 입력 TM 좌표와의 거리 기준으로 정렬되므로 첫 측정소를 우선 사용합니다
 
 ## 주의할 점
 

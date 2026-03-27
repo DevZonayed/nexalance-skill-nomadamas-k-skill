@@ -581,6 +581,9 @@ test("fine-dust-location skill documents the official two-api flow and fallback 
     assert.match(doc, /B552584\/MsrstnInfoInqireSvc\/getNearbyMsrstnList/);
     assert.match(doc, /B552584\/MsrstnInfoInqireSvc\/getMsrstnList/);
     assert.match(doc, /B552584\/ArpltnInforInqireSvc\/getMsrstnAcctoRltmMesureDnsty/);
+    assert.match(doc, /tmX/);
+    assert.match(doc, /tmY/);
+    assert.match(doc, /TM 좌표|중부원점/);
     assert.match(doc, /PM10/);
     assert.match(doc, /PM2\.5|PM25/);
     assert.match(doc, /위도/);

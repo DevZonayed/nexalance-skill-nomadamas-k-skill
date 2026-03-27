@@ -8,10 +8,21 @@ import pathlib
 import sys
 import urllib.parse
 import urllib.request
+from math import atan2, cos, radians, sin, sqrt, tan
 
 STATION_SERVICE_URL = "http://apis.data.go.kr/B552584/MsrstnInfoInqireSvc"
 MEASUREMENT_SERVICE_URL = "http://apis.data.go.kr/B552584/ArpltnInforInqireSvc"
 SECRET_NAME = "AIR_KOREA_OPEN_API_KEY"
+WGS84_A = 6378137.0
+WGS84_F = 1 / 298.257223563
+BESSEL_A = 6377397.155
+BESSEL_F = 1 / 299.1528128
+AIR_KOREA_TM_LAT0 = radians(38.0)
+AIR_KOREA_TM_LON0 = radians(127.0)
+AIR_KOREA_TM_FALSE_EASTING = 200000.0
+AIR_KOREA_TM_FALSE_NORTHING = 500000.0
+AIR_KOREA_TM_SCALE = 1.0
+AIR_KOREA_WGS84_TO_BESSEL = (146.43, -507.89, -681.46)
 GRADE_LABELS = {
     "1": "좋음",
     "2": "보통",
@@ -67,6 +78,89 @@ def to_float(raw: object) -> float | None:
 
 def squared_distance(lat_a: float, lon_a: float, lat_b: float, lon_b: float) -> float:
     return (lat_a - lat_b) ** 2 + (lon_a - lon_b) ** 2
+
+
+def meridional_arc(phi: float, *, semi_major_axis: float, eccentricity_squared: float) -> float:
+    e2 = eccentricity_squared
+    return semi_major_axis * (
+        (1 - e2 / 4 - 3 * e2**2 / 64 - 5 * e2**3 / 256) * phi
+        - (3 * e2 / 8 + 3 * e2**2 / 32 + 45 * e2**3 / 1024) * sin(2 * phi)
+        + (15 * e2**2 / 256 + 45 * e2**3 / 1024) * sin(4 * phi)
+        - (35 * e2**3 / 3072) * sin(6 * phi)
+    )
+
+
+def wgs84_to_bessel(lat: float, lon: float) -> tuple[float, float]:
+    dx, dy, dz = AIR_KOREA_WGS84_TO_BESSEL
+    source_e2 = 2 * WGS84_F - WGS84_F**2
+    target_e2 = 2 * BESSEL_F - BESSEL_F**2
+
+    lat_rad = radians(lat)
+    lon_rad = radians(lon)
+    sin_lat = sin(lat_rad)
+    cos_lat = cos(lat_rad)
+    prime_vertical_radius = WGS84_A / sqrt(1 - source_e2 * sin_lat * sin_lat)
+
+    x = prime_vertical_radius * cos_lat * cos(lon_rad) + dx
+    y = prime_vertical_radius * cos_lat * sin(lon_rad) + dy
+    z = prime_vertical_radius * (1 - source_e2) * sin_lat + dz
+
+    lon_bessel = atan2(y, x)
+    horizontal = sqrt(x * x + y * y)
+    lat_bessel = atan2(z, horizontal * (1 - target_e2))
+
+    for _ in range(8):
+        sin_lat_bessel = sin(lat_bessel)
+        bessel_radius = BESSEL_A / sqrt(1 - target_e2 * sin_lat_bessel * sin_lat_bessel)
+        next_lat = atan2(z + target_e2 * bessel_radius * sin_lat_bessel, horizontal)
+        if abs(next_lat - lat_bessel) < 1e-14:
+            lat_bessel = next_lat
+            break
+        lat_bessel = next_lat
+
+    return lat_bessel, lon_bessel
+
+
+def wgs84_to_air_korea_tm(lat: float, lon: float) -> tuple[float, float]:
+    lat_rad, lon_rad = wgs84_to_bessel(lat, lon)
+    bessel_e2 = 2 * BESSEL_F - BESSEL_F**2
+    second_eccentricity_squared = bessel_e2 / (1 - bessel_e2)
+
+    sin_lat = sin(lat_rad)
+    cos_lat = cos(lat_rad)
+    tan_lat = tan(lat_rad)
+
+    prime_vertical_radius = BESSEL_A / sqrt(1 - bessel_e2 * sin_lat * sin_lat)
+    tan_squared = tan_lat * tan_lat
+    curvature = second_eccentricity_squared * cos_lat * cos_lat
+    A = (lon_rad - AIR_KOREA_TM_LON0) * cos_lat
+
+    meridional = meridional_arc(lat_rad, semi_major_axis=BESSEL_A, eccentricity_squared=bessel_e2)
+    meridional_origin = meridional_arc(
+        AIR_KOREA_TM_LAT0,
+        semi_major_axis=BESSEL_A,
+        eccentricity_squared=bessel_e2,
+    )
+
+    tm_x = AIR_KOREA_TM_FALSE_EASTING + AIR_KOREA_TM_SCALE * prime_vertical_radius * (
+        A
+        + (1 - tan_squared + curvature) * A**3 / 6
+        + (5 - 18 * tan_squared + tan_squared**2 + 72 * curvature - 58 * second_eccentricity_squared) * A**5 / 120
+    )
+    tm_y = AIR_KOREA_TM_FALSE_NORTHING + AIR_KOREA_TM_SCALE * (
+        meridional
+        - meridional_origin
+        + prime_vertical_radius
+        * tan_lat
+        * (
+            A**2 / 2
+            + (5 - tan_squared + 9 * curvature + 4 * curvature**2) * A**4 / 24
+            + (61 - 58 * tan_squared + tan_squared**2 + 600 * curvature - 330 * second_eccentricity_squared)
+            * A**6
+            / 720
+        )
+    )
+    return tm_x, tm_y
 
 
 def pick_station(
@@ -247,13 +341,14 @@ def fetch_station_payload(args: argparse.Namespace) -> dict:
     }
 
     if args.lat is not None and args.lon is not None:
+        tm_x, tm_y = wgs84_to_air_korea_tm(args.lat, args.lon)
         nearby_payload = fetch_json(
             f"{STATION_SERVICE_URL}/getNearbyMsrstnList",
             {
                 **common,
                 "numOfRows": 10,
-                "dmX": args.lat,
-                "dmY": args.lon,
+                "tmX": tm_x,
+                "tmY": tm_y,
             },
         )
         if extract_items(nearby_payload):

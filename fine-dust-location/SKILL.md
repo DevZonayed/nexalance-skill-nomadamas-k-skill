@@ -34,7 +34,7 @@ metadata:
 
 ## Inputs
 
-- 우선 입력: 사용자 위치 위도/경도
+- 우선 입력: 사용자 위치 위도/경도(WGS84)
 - fallback 입력: 지역명/행정구역 힌트 또는 측정소명
 
 ## Workflow
@@ -57,7 +57,7 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" 'test -n "$AIR_KOREA_OPEN_API_
 
 ### 2. Prefer the official location-first measuring-station lookup
 
-좌표를 이미 알고 있으면 측정소정보 API의 `getNearbyMsrstnList` 로 가까운 측정소를 찾는다.
+좌표를 이미 알고 있으면 먼저 위도/경도(WGS84)를 에어코리아 nearby 조회가 요구하는 **TM 좌표(중부원점)** 로 바꾼 뒤, 측정소정보 API의 `getNearbyMsrstnList` 로 가까운 측정소를 찾는다.
 
 ```bash
 SOPS_AGE_KEY_FILE="$HOME/.config/k-skill/age/keys.txt" \
@@ -67,9 +67,11 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
     --data-urlencode "returnType=json" \
     --data-urlencode "numOfRows=10" \
     --data-urlencode "pageNo=1" \
-    --data-urlencode "dmX=37.5665" \
-    --data-urlencode "dmY=126.9780"'
+    --data-urlencode "tmX=198245.053183" \
+    --data-urlencode "tmY=451586.837879"'
 ```
+
+`getNearbyMsrstnList` 는 WGS84 위도/경도를 직접 받지 않는다. `scripts/fine_dust.py` 는 사용자 좌표를 TM 좌표로 변환한 뒤 `tmX`/`tmY` 로 nearby 조회를 호출한다. 같은 기술문서에 `getTMStdrCrdnt` 도 있지만, 그 기능은 읍면동명 기준 TM 조회이므로 이 스킬의 위치-first 경로에서는 직접 WGS84→TM 변환을 사용한다.
 
 ### 3. Use the official fallback when the user cannot provide precise coordinates
 
@@ -88,7 +90,7 @@ sops exec-env "$HOME/.config/k-skill/secrets.env" \
 
 이 스킬의 fallback/폴백 규칙은 다음 순서를 기본으로 한다.
 
-1. 위도/경도 → `getNearbyMsrstnList`
+1. 위도/경도(WGS84) → TM 좌표 변환 → `getNearbyMsrstnList`
 2. 지역명/행정구역 → `getMsrstnList`
 3. 측정소명 직접 지정 → `getMsrstnAcctoRltmMesureDnsty`
 
@@ -144,6 +146,7 @@ python3 scripts/fine_dust.py report \
 - API key 미설정
 - 위치 좌표 없이 지역 힌트도 없는 경우
 - nearby API 결과가 비어 지역 fallback이 필요한 경우
+- nearby API 에 raw 위도/경도를 넘겨 잘못된 측정소를 고르는 경우
 - 측정소명 표기 불일치
 
 ## Notes
