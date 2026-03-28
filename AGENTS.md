@@ -16,3 +16,10 @@ These rules are repo-specific and apply to everything under this directory.
 
 - For release or packaging changes, run `npm run ci`.
 - Keep release docs, workflow files, and package metadata aligned in the same change.
+
+## Development skill install rules
+
+- When testing or developing skills from this repository, install or sync the current skill directories into the user's home-directory global skill locations first.
+- Use `~/.claude/skills/<skill-name>` for Claude Code and `~/.agents/skills/<skill-name>` for agents-compatible home installs.
+- Respect existing home-directory indirection such as symlinks when syncing `~/.agents/skills`.
+- Do **not** create repo-local `.claude` or `.agents` directories for skill installation unless the user explicitly asks for a repository-local test fixture.
