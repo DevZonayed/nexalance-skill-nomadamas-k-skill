@@ -1,7 +1,7 @@
 {
-  "name": "k-lotto",
+  "name": "blue-ribbon-nearby",
   "version": "0.1.0",
-  "description": "Official dhlottery-backed client for Korean Lotto results",
+  "description": "Official Blue Ribbon Survey nearby restaurant client for asking a user's location and finding nearby ribbon picks",
   "license": "MIT",
   "main": "src/index.js",
   "files": [
@@ -21,8 +21,9 @@
   "keywords": [
     "k-skill",
     "korea",
-    "lotto",
-    "dhlottery"
+    "restaurant",
+    "blue-ribbon",
+    "bluer"
   ],
   "scripts": {
     "lint": "node --check src/index.js && node --check src/parse.js && node --check test/index.test.js",

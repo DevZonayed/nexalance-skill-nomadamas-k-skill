@@ -48,7 +48,11 @@ npx --yes skills add <owner/repo> \
   --skill kbo-results \
   --skill lotto-results \
   --skill kakaotalk-mac \
-  --skill zipcode-search
+  --skill fine-dust-location \
+  --skill daiso-product-search \
+  --skill blue-ribbon-nearby \
+  --skill zipcode-search \
+  --skill delivery-tracking
 ```
 
 인증이 필요한 기능만 부분 설치할 때도 `k-skill-setup` 은 같이 넣는다.
@@ -58,7 +62,8 @@ npx --yes skills add <owner/repo> \
   --skill k-skill-setup \
   --skill srt-booking \
   --skill ktx-booking \
-  --skill seoul-subway-arrival
+  --skill seoul-subway-arrival \
+  --skill fine-dust-location
 ```
 
 로컬 저장소에서 바로 전체 설치 테스트:
@@ -110,7 +115,7 @@ brew install silver-flight-group/tap/kakaocli
 ### Python 패키지
 
 ```bash
-python3 -m pip install SRTrain korail2
+python3 -m pip install SRTrain korail2 pycryptodome
 ```
 
 운영체제 정책이나 권한 때문에 전역 설치가 막히면, 임의의 대체 구현으로 넘어가지 말고 그 차단 사유를 사용자에게 설명한 뒤 다음 설치 단계를 정합니다.
@@ -130,6 +135,7 @@ python3 -m pip install SRTrain korail2
 - `srt-booking`
 - `ktx-booking`
 - `seoul-subway-arrival`
+- `fine-dust-location`
 
 관련 문서:
 

@@ -16,3 +16,17 @@ These rules are repo-specific and apply to everything under this directory.
 
 - For release or packaging changes, run `npm run ci`.
 - Keep release docs, workflow files, and package metadata aligned in the same change.
+
+## Development skill install rules
+
+- When testing or developing skills from this repository, install or sync the current skill directories into the user's home-directory global skill locations first.
+- Use `~/.claude/skills/<skill-name>` for Claude Code and `~/.agents/skills/<skill-name>` for agents-compatible home installs.
+- Respect existing home-directory indirection such as symlinks when syncing `~/.agents/skills`.
+- Do **not** create repo-local `.claude` or `.agents` directories for skill installation unless the user explicitly asks for a repository-local test fixture.
+
+## Free API proxy policy
+
+- The built-in `k-skill-proxy` is for **free APIs only**.
+- Default posture: public read-only endpoint, **no proxy auth by default**.
+- Keep free-API proxy surfaces narrow, allowlisted, cache-backed, and rate-limited.
+- If abuse or operational issues appear later, add stricter controls then instead of preemptively requiring auth.

@@ -1,7 +1,7 @@
 {
-  "name": "k-lotto",
+  "name": "daiso-product-search",
   "version": "0.1.0",
-  "description": "Official dhlottery-backed client for Korean Lotto results",
+  "description": "Official Daiso Mall store/product search and pickup-stock client",
   "license": "MIT",
   "main": "src/index.js",
   "files": [
@@ -21,8 +21,9 @@
   "keywords": [
     "k-skill",
     "korea",
-    "lotto",
-    "dhlottery"
+    "daiso",
+    "inventory",
+    "pickup-stock"
   ],
   "scripts": {
     "lint": "node --check src/index.js && node --check src/parse.js && node --check test/index.test.js",
