@@ -48,6 +48,7 @@ npx --yes skills add <owner/repo> \
   --skill kbo-results \
   --skill lotto-results \
   --skill kakaotalk-mac \
+  --skill fine-dust-location \
   --skill daiso-product-search \
   --skill blue-ribbon-nearby \
   --skill zipcode-search \
@@ -61,7 +62,8 @@ npx --yes skills add <owner/repo> \
   --skill k-skill-setup \
   --skill srt-booking \
   --skill ktx-booking \
-  --skill seoul-subway-arrival
+  --skill seoul-subway-arrival \
+  --skill fine-dust-location
 ```
 
 로컬 저장소에서 바로 전체 설치 테스트:
@@ -133,6 +135,7 @@ python3 -m pip install SRTrain korail2 pycryptodome
 - `srt-booking`
 - `ktx-booking`
 - `seoul-subway-arrival`
+- `fine-dust-location`
 
 관련 문서:
 

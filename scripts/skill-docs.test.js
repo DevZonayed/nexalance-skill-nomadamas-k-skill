@@ -546,10 +546,12 @@ test("daiso-product-search docs record the shipped feature and official sources"
   assert.match(sources, /https:\/\/www\.daisomall\.co\.kr\/api\/pd\/pdh\/selStrPkupStck/);
 });
 
-test("root pack:dry-run script covers the daiso-product-search workspace", () => {
+test("root pack:dry-run script covers all publishable workspaces", () => {
   const packageJson = readJson("package.json");
 
+  assert.match(packageJson.scripts["pack:dry-run"], /workspace k-lotto/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace daiso-product-search/);
+  assert.match(packageJson.scripts["pack:dry-run"], /workspace blue-ribbon-nearby/);
 });
 
 test("repository docs advertise the blue-ribbon-nearby skill across the documented surfaces", () => {
@@ -603,10 +605,69 @@ test("blue-ribbon-nearby package README stays aligned with the location-first an
   assert.match(packageReadme, /searchNearbyByLocationQuery/);
 });
 
-test("root pack:dry-run script covers all publishable workspaces", () => {
-  const packageJson = readJson("package.json");
+test("repository docs advertise the fine-dust-location skill across the documented surfaces", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const setup = read(path.join("docs", "setup.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const secretsExample = read(path.join("examples", "secrets.env.example"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "fine-dust-location.md");
 
-  assert.match(packageJson.scripts["pack:dry-run"], /workspace k-lotto/);
-  assert.match(packageJson.scripts["pack:dry-run"], /workspace daiso-product-search/);
-  assert.match(packageJson.scripts["pack:dry-run"], /workspace blue-ribbon-nearby/);
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/fine-dust-location.md to exist");
+  assert.match(readme, /\| 사용자 위치 미세먼지 조회 \|/);
+  assert.match(readme, /\[사용자 위치 미세먼지 조회 가이드\]\(docs\/features\/fine-dust-location\.md\)/);
+  assert.match(install, /--skill fine-dust-location/);
+  assert.match(roadmap, /사용자 위치 미세먼지 조회 스킬 출시/);
+  assert.match(sources, /에어코리아 대기오염정보: https:\/\/www\.data\.go\.kr\/data\/15073861\/openapi\.do/);
+  assert.match(sources, /에어코리아 측정소정보: https:\/\/www\.data\.go\.kr\/data\/15073877\/openapi\.do/);
+  assert.match(setup, /AIR_KOREA_OPEN_API_KEY/);
+  assert.match(security, /AIR_KOREA_OPEN_API_KEY/);
+  assert.match(secretsExample, /^AIR_KOREA_OPEN_API_KEY=replace-me$/m);
+});
+
+test("fine-dust-location skill documents the official two-api flow and fallback handling", () => {
+  const skillPath = path.join(repoRoot, "fine-dust-location", "SKILL.md");
+
+  assert.ok(fs.existsSync(skillPath), "expected fine-dust-location/SKILL.md to exist");
+
+  const skill = read(path.join("fine-dust-location", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "fine-dust-location.md"));
+
+  assert.match(skill, /^name: fine-dust-location$/m);
+  assert.match(skill, /^description: .*미세먼지.*초미세먼지.*위치.*$/m);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /AIR_KOREA_OPEN_API_KEY/);
+    assert.match(doc, /B552584\/MsrstnInfoInqireSvc\/getNearbyMsrstnList/);
+    assert.match(doc, /B552584\/MsrstnInfoInqireSvc\/getMsrstnList/);
+    assert.match(doc, /B552584\/ArpltnInforInqireSvc\/getMsrstnAcctoRltmMesureDnsty/);
+    assert.match(doc, /tmX/);
+    assert.match(doc, /tmY/);
+    assert.match(doc, /TM 좌표|중부원점/);
+    assert.match(doc, /PM10/);
+    assert.match(doc, /PM2\.5|PM25/);
+    assert.match(doc, /위도/);
+    assert.match(doc, /경도/);
+    assert.match(doc, /행정구역|지역명/);
+    assert.match(doc, /fallback|폴백|대체 흐름/i);
+    assert.match(doc, /가까운 측정소/);
+    assert.match(doc, /조회 시각|조회 시점/);
+    assert.match(doc, /python3 scripts\/fine_dust\.py/);
+  }
+});
+
+test("fine-dust helper python regression tests pass", () => {
+  const result = childProcess.spawnSync(
+    "python3",
+    ["-m", "unittest", "discover", "-s", "scripts", "-p", "test_fine_dust.py"],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+
+  assert.equal(
+    result.status,
+    0,
+    `expected python fine-dust helper regression tests to pass\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+  );
 });
