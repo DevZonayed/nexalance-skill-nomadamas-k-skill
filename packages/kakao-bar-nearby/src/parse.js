@@ -2,7 +2,8 @@ const SEARCH_ITEM_PATTERN = /<li\s+class="search_item\s+base"([\s\S]*?)<\/li>/gi
 const TAG_PATTERN = /<[^>]+>/g;
 const NON_WORD_PATTERN = /[^\p{L}\p{N}]+/gu;
 const ANCHOR_STATION_PATTERN = /(역|기차역|전철역|지하철역|환승역)$/u;
-const ANCHOR_CATEGORY_PATTERN = /(기차역|전철역|지하철역|역사|광장|공원|거리|테마거리|관광명소|랜드마크)/u;
+const ANCHOR_CATEGORY_PATTERN =
+  /(기차역|전철역|지하철역|역사|광장|공원|거리|테마거리|관광명소|랜드마크|먹자골목|교차로|주차장|정류장|환승센터)/u;
 const BAR_CATEGORY_PATTERN = /(술집|주점|와인바|바\(BAR\)|\bBAR\b|맥주,호프|호프|이자카야|칵테일|포차|요리주점|일본식주점)/iu;
 
 function decodeHtml(value) {
@@ -237,6 +238,13 @@ function normalizeAnchorPanel(panel, searchItem = {}) {
   };
 }
 
+function isAnchorLikePlace(place = {}) {
+  return (
+    !BAR_CATEGORY_PATTERN.test(`${place.name || ""} ${place.category || ""}`) &&
+    (ANCHOR_STATION_PATTERN.test(place.name || "") || ANCHOR_CATEGORY_PATTERN.test(place.category || ""))
+  );
+}
+
 function isBarCategoryValue(value) {
   return BAR_CATEGORY_PATTERN.test(String(value || ""));
 }
@@ -291,6 +299,7 @@ function normalizePlacePanel(panel, searchItem = {}, anchorPoint = {}) {
 module.exports = {
   SEARCH_ITEM_PATTERN,
   calculateDistanceMeters,
+  isAnchorLikePlace,
   isBarPanel,
   normalizeAnchorPanel,
   normalizePlacePanel,

@@ -1,4 +1,5 @@
 const {
+  isAnchorLikePlace,
   isBarPanel,
   normalizeAnchorPanel,
   normalizePlacePanel,
@@ -10,6 +11,7 @@ const SEARCH_VIEW_URL = "https://m.map.kakao.com/actions/searchView";
 const PLACE_PANEL_URL_BASE = "https://place-api.map.kakao.com/places/panel3";
 const DEFAULT_PANEL_LIMIT = 8;
 const STATIONISH_CATEGORY_PATTERN = /(기차역|전철역|지하철역|환승역|수도권\d+호선|역)$/u;
+const NON_WORD_PATTERN = /[^\p{L}\p{N}]+/gu;
 const DEFAULT_BROWSER_HEADERS = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "accept-language": "ko,en-US;q=0.9,en;q=0.8",
@@ -89,8 +91,43 @@ function isUsableAnchor(anchor) {
   return Boolean(
     anchor?.sourceUrl &&
     Number.isFinite(anchor?.latitude) &&
-    Number.isFinite(anchor?.longitude),
+    Number.isFinite(anchor?.longitude)
   );
+}
+
+function normalizeQueryText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(NON_WORD_PATTERN, "");
+}
+
+function isStationLikeQuery(query) {
+  return /역$/u.test(query);
+}
+
+function matchesAnchorQueryPrefix(query, anchor = {}) {
+  const normalizedQuery = normalizeQueryText(query);
+
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  return [anchor.name, anchor.category]
+    .map((value) => normalizeQueryText(value))
+    .some((value) => value && (value.startsWith(normalizedQuery) || normalizedQuery.startsWith(value)));
+}
+
+function shouldAcceptAnchor(query, anchor) {
+  if (!isUsableAnchor(anchor)) {
+    return false;
+  }
+
+  if (!isStationLikeQuery(query)) {
+    return true;
+  }
+
+  return isAnchorLikePlace(anchor) && matchesAnchorQueryPrefix(query, anchor);
 }
 
 async function resolveAnchor(query, options = {}) {
@@ -103,7 +140,7 @@ async function resolveAnchor(query, options = {}) {
       const anchorPanel = await fetchPlacePanel(candidate.id, options);
       const anchor = normalizeAnchorPanel(anchorPanel, candidate);
 
-      if (isUsableAnchor(anchor)) {
+      if (shouldAcceptAnchor(query, anchor)) {
         return {
           anchor,
           anchorCandidates
@@ -121,8 +158,8 @@ async function resolveAnchor(query, options = {}) {
 
 function shouldRetryWithStationQuery(query, anchor) {
   return (
-    !/역$/u.test(query) &&
-    (!Number.isFinite(anchor.latitude) || !Number.isFinite(anchor.longitude) || !STATIONISH_CATEGORY_PATTERN.test(anchor.category))
+    !isStationLikeQuery(query) &&
+    (!isUsableAnchor(anchor) || (!STATIONISH_CATEGORY_PATTERN.test(anchor.category) && !isAnchorLikePlace(anchor)))
   );
 }
 

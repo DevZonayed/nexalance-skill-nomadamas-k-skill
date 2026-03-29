@@ -183,9 +183,253 @@ test("searchNearbyBarsByLocationQuery skips unusable station-like anchor panels 
   assert.ok(Number.isFinite(result.items[0].distanceMeters));
 });
 
-function makeResponse(body, contentType) {
+test("searchNearbyBarsByLocationQuery keeps a usable landmark anchor for area queries instead of overwriting it with a station-business fallback", async () => {
+  const query = "사당";
+  const areaAnchorSearchHtml = buildSearchResultsHtml([
+    {
+      id: "11220631014",
+      name: "사당역",
+      category: "서울 서초구 방배2동",
+      address: "버스 정류장 번호 :"
+    },
+    {
+      id: "792176818",
+      name: "사당1동먹자골목상점가",
+      category: "먹자골목",
+      address: "서울 동작구 사당동 1101"
+    }
+  ]);
+  const stationFallbackSearchHtml = buildSearchResultsHtml([
+    {
+      id: "21160811",
+      name: "사당역 2호선",
+      category: "수도권2호선",
+      address: "서울 동작구 사당동"
+    },
+    {
+      id: "211389635",
+      name: "삼육가 사당역1호점",
+      category: "육류,고기",
+      address: "서울 서초구 방배동"
+    },
+    {
+      id: "23371032",
+      name: "사당역 공영주차장",
+      category: "공영주차장",
+      address: "서울 서초구 방배동"
+    }
+  ]);
+  const nearbyBarSearchHtml = buildSearchResultsHtml([
+    {
+      id: "2001",
+      name: "데이브루펍",
+      category: "맥주,호프",
+      address: "서울 중구 칠패로 31",
+      phone: "02-1111-2222",
+      openStatusLabel: "영업중",
+      openStatusText: "영업시간 12:00 ~ 23:30"
+    }
+  ]);
+  const themeStreetAnchorPanel = {
+    summary: {
+      confirm_id: "792176818",
+      name: "사당1동먹자골목상점가",
+      category: {
+        name2: "관광,명소",
+        name3: "테마거리"
+      },
+      point: {
+        lat: 37.47835510628598,
+        lon: 126.98071247669172
+      },
+      address: {
+        disp: "서울 동작구 사당동 1101"
+      }
+    }
+  };
+  const invalidBusStopResponse = makeResponse({ error: "not found" }, "application/json", 404);
+  const invalidStationPanel = {
+    subway_station_id: "21160811"
+  };
+  const businessAnchorPanel = {
+    summary: {
+      confirm_id: "211389635",
+      name: "삼육가 사당역1호점",
+      category: {
+        name2: "한식",
+        name3: "육류,고기"
+      },
+      point: {
+        lat: 37.47742921471774,
+        lon: 126.98296478218445
+      },
+      address: {
+        disp: "서울 서초구 방배동"
+      }
+    }
+  };
+  const publicAnchorPanel = {
+    summary: {
+      confirm_id: "23371032",
+      name: "사당역 공영주차장",
+      category: {
+        name2: "교통시설",
+        name3: "주차장"
+      },
+      point: {
+        lat: 37.475555162992165,
+        lon: 126.98330436588915
+      },
+      address: {
+        disp: "서울 서초구 방배동"
+      }
+    }
+  };
+  const calls = [];
+  const responses = new Map([
+    [buildSearchUrl(query), makeResponse(areaAnchorSearchHtml, "text/html")],
+    [buildSearchUrl(`${query}역`), makeResponse(stationFallbackSearchHtml, "text/html")],
+    [buildSearchUrl(`${query} 술집`), makeResponse(nearbyBarSearchHtml, "text/html")],
+    ["https://place-api.map.kakao.com/places/panel3/11220631014", invalidBusStopResponse],
+    ["https://place-api.map.kakao.com/places/panel3/792176818", makeResponse(themeStreetAnchorPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/21160811", makeResponse(invalidStationPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/211389635", makeResponse(businessAnchorPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/23371032", makeResponse(publicAnchorPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/2001", makeResponse(openBarPanel, "application/json")]
+  ]);
+
+  const result = await searchNearbyBarsByLocationQuery(query, {
+    limit: 1,
+    panelLimit: 1,
+    fetchImpl: async (url) => {
+      const resolved = String(url);
+      calls.push(resolved);
+      const response = responses.get(resolved);
+      if (!response) {
+        throw new Error(`unexpected url: ${resolved}`);
+      }
+
+      return response;
+    }
+  });
+
+  assert.equal(result.anchor.id, "792176818");
+  assert.equal(result.anchor.name, "사당1동먹자골목상점가");
+  assert.ok(Number.isFinite(result.items[0].distanceMeters));
+  assert.ok(!calls.includes(buildSearchUrl("사당역")));
+});
+
+test("searchNearbyBarsByLocationQuery keeps station-like queries on public anchors instead of unrelated businesses", async () => {
+  const query = "사당역";
+  const stationSearchHtml = buildSearchResultsHtml([
+    {
+      id: "21160811",
+      name: "사당역 2호선",
+      category: "수도권2호선",
+      address: "서울 동작구 사당동"
+    },
+    {
+      id: "21160829",
+      name: "사당역 4호선",
+      category: "수도권4호선",
+      address: "서울 동작구 사당동"
+    },
+    {
+      id: "211389635",
+      name: "삼육가 사당역1호점",
+      category: "육류,고기",
+      address: "서울 서초구 방배동"
+    },
+    {
+      id: "23371032",
+      name: "사당역 공영주차장",
+      category: "공영주차장",
+      address: "서울 서초구 방배동"
+    }
+  ]);
+  const nearbyBarSearchHtml = buildSearchResultsHtml([
+    {
+      id: "2001",
+      name: "데이브루펍",
+      category: "맥주,호프",
+      address: "서울 중구 칠패로 31",
+      phone: "02-1111-2222",
+      openStatusLabel: "영업중",
+      openStatusText: "영업시간 12:00 ~ 23:30"
+    }
+  ]);
+  const invalidStationPanel = {
+    subway_station_id: "21160811"
+  };
+  const invalidSecondStationPanel = {
+    subway_station_id: "21160829"
+  };
+  const businessAnchorPanel = {
+    summary: {
+      confirm_id: "211389635",
+      name: "삼육가 사당역1호점",
+      category: {
+        name2: "한식",
+        name3: "육류,고기"
+      },
+      point: {
+        lat: 37.47742921471774,
+        lon: 126.98296478218445
+      },
+      address: {
+        disp: "서울 서초구 방배동"
+      }
+    }
+  };
+  const publicAnchorPanel = {
+    summary: {
+      confirm_id: "23371032",
+      name: "사당역 공영주차장",
+      category: {
+        name2: "교통시설",
+        name3: "주차장"
+      },
+      point: {
+        lat: 37.475555162992165,
+        lon: 126.98330436588915
+      },
+      address: {
+        disp: "서울 서초구 방배동"
+      }
+    }
+  };
+  const responses = new Map([
+    [buildSearchUrl(query), makeResponse(stationSearchHtml, "text/html")],
+    [buildSearchUrl(`${query} 술집`), makeResponse(nearbyBarSearchHtml, "text/html")],
+    ["https://place-api.map.kakao.com/places/panel3/21160811", makeResponse(invalidStationPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/21160829", makeResponse(invalidSecondStationPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/211389635", makeResponse(businessAnchorPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/23371032", makeResponse(publicAnchorPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/2001", makeResponse(openBarPanel, "application/json")]
+  ]);
+
+  const result = await searchNearbyBarsByLocationQuery(query, {
+    limit: 1,
+    panelLimit: 1,
+    fetchImpl: async (url) => {
+      const response = responses.get(String(url));
+      if (!response) {
+        throw new Error(`unexpected url: ${url}`);
+      }
+
+      return response;
+    }
+  });
+
+  assert.equal(result.anchor.id, "23371032");
+  assert.equal(result.anchor.name, "사당역 공영주차장");
+  assert.equal(result.anchor.category, "주차장");
+  assert.ok(Number.isFinite(result.items[0].distanceMeters));
+});
+
+function makeResponse(body, contentType, status = 200) {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), {
-    status: 200,
+    status,
     headers: {
       "content-type": contentType
     }
