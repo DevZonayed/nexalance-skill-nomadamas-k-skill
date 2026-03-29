@@ -18,25 +18,27 @@ npm install kleague-results
 ```js
 const { getKLeagueSummary, getMatchResults, getStandings } = require("kleague-results");
 
-const results = await getMatchResults("2026-03-22", {
-  leagueId: "K리그1",
-  team: "FC서울",
-});
+(async () => {
+  const results = await getMatchResults("2026-03-22", {
+    leagueId: "K리그1",
+    team: "FC서울",
+  });
 
-const standings = await getStandings({
-  leagueId: 1,
-  year: 2026,
-});
+  const standings = await getStandings({
+    leagueId: 1,
+    year: 2026,
+  });
 
-const summary = await getKLeagueSummary("2026-03-22", {
-  leagueId: "K리그1",
-  team: "FC서울",
-  includeStandings: true,
-});
+  const summary = await getKLeagueSummary("2026-03-22", {
+    leagueId: "K리그1",
+    team: "FC서울",
+    includeStandings: true,
+  });
 
-console.log(results.matches[0]);
-console.log(standings.rows[0]);
-console.log(summary);
+  console.log(results.matches[0]);
+  console.log(standings.rows[0]);
+  console.log(summary);
+})();
 ```
 
 ## API
