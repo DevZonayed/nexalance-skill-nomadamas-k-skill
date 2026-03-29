@@ -66,8 +66,8 @@ test("normalizePlacePanel keeps menu, seating, phone, distance, and open-now hin
 
 test("searchNearbyBarsByLocationQuery returns open bars first and drops non-bar categories", async () => {
   const responses = new Map([
-    ["https://m.map.kakao.com/actions/searchView?q=%EC%84%9C%EC%9A%B8%EC%97%AD", makeResponse(anchorSearchHtml, "text/html")],
-    ["https://m.map.kakao.com/actions/searchView?q=%EC%84%9C%EC%9A%B8%EC%97%AD+%EC%88%A0%EC%A7%91", makeResponse(barSearchHtml, "text/html")],
+    [buildSearchUrl("서울역"), makeResponse(anchorSearchHtml, "text/html")],
+    [buildSearchUrl("서울역 술집"), makeResponse(barSearchHtml, "text/html")],
     ["https://place-api.map.kakao.com/places/panel3/1001", makeResponse(anchorPanel, "application/json")],
     ["https://place-api.map.kakao.com/places/panel3/2001", makeResponse(openBarPanel, "application/json")],
     ["https://place-api.map.kakao.com/places/panel3/2002", makeResponse(closedBarPanel, "application/json")],
@@ -107,6 +107,82 @@ test("searchNearbyBarsByLocationQuery returns open bars first and drops non-bar 
   assert.ok(calls.some((url) => url.endsWith("/places/panel3/2001")));
 });
 
+test("searchNearbyBarsByLocationQuery skips unusable station-like anchor panels and keeps distances", async () => {
+  const query = "사당";
+  const fallbackAnchorSearchHtml = buildSearchResultsHtml([
+    {
+      id: "21160811",
+      name: "사당역",
+      category: "수도권2호선",
+      address: "서울 동작구 사당동"
+    },
+    {
+      id: "3001",
+      name: "사당역 4호선",
+      category: "전철역",
+      address: "서울 동작구 사당동"
+    }
+  ]);
+  const nearbyBarSearchHtml = buildSearchResultsHtml([
+    {
+      id: "2001",
+      name: "데이브루펍",
+      category: "맥주,호프",
+      address: "서울 중구 칠패로 31",
+      phone: "02-1111-2222",
+      openStatusLabel: "영업중",
+      openStatusText: "영업시간 12:00 ~ 23:30"
+    }
+  ]);
+  const validSadangAnchorPanel = {
+    summary: {
+      confirm_id: "3001",
+      name: "사당역",
+      category: {
+        name2: "전철역",
+        name3: "전철역"
+      },
+      point: {
+        lat: 37.47659,
+        lon: 126.98163
+      },
+      address: {
+        disp: "서울 동작구 사당동"
+      }
+    }
+  };
+  const invalidStationPanel = {
+    subway_station_id: "21160811"
+  };
+  const responses = new Map([
+    [buildSearchUrl(query), makeResponse(fallbackAnchorSearchHtml, "text/html")],
+    [buildSearchUrl(`${query}역`), makeResponse(fallbackAnchorSearchHtml, "text/html")],
+    [buildSearchUrl(`${query} 술집`), makeResponse(nearbyBarSearchHtml, "text/html")],
+    ["https://place-api.map.kakao.com/places/panel3/21160811", makeResponse(invalidStationPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/3001", makeResponse(validSadangAnchorPanel, "application/json")],
+    ["https://place-api.map.kakao.com/places/panel3/2001", makeResponse(openBarPanel, "application/json")]
+  ]);
+
+  const result = await searchNearbyBarsByLocationQuery(query, {
+    limit: 1,
+    panelLimit: 1,
+    fetchImpl: async (url) => {
+      const response = responses.get(String(url));
+      if (!response) {
+        throw new Error(`unexpected url: ${url}`);
+      }
+
+      return response;
+    }
+  });
+
+  assert.equal(result.anchor.id, "3001");
+  assert.equal(result.anchor.name, "사당역");
+  assert.equal(result.anchor.sourceUrl, "https://place.map.kakao.com/3001");
+  assert.equal(result.items.length, 1);
+  assert.ok(Number.isFinite(result.items[0].distanceMeters));
+});
+
 function makeResponse(body, contentType) {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), {
     status: 200,
@@ -114,4 +190,24 @@ function makeResponse(body, contentType) {
       "content-type": contentType
     }
   });
+}
+
+function buildSearchResultsHtml(items) {
+  return `
+    <ul>
+      ${items.map((item) => `
+        <li class="search_item base" data-id="${item.id}" data-title="${item.name}"${item.phone ? ` data-phone="${item.phone}"` : ""}>
+          <strong class="tit_g">${item.name}</strong>
+          <span class="txt_ginfo">${item.category || ""}</span>
+          ${item.openStatusLabel ? `<span class="tag_openoff">${item.openStatusLabel}</span>` : ""}
+          ${item.openStatusText ? `<span class="txt_openoff">${item.openStatusText}</span>` : ""}
+          <span class="txt_g">${item.address || ""}</span>
+        </li>
+      `).join("\n")}
+    </ul>
+  `;
+}
+
+function buildSearchUrl(query) {
+  return `https://m.map.kakao.com/actions/searchView?q=${encodeURIComponent(query).replace(/%20/g, "+")}`;
 }

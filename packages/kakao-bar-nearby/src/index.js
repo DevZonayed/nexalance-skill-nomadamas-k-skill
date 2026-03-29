@@ -85,6 +85,14 @@ function rankAnchorQueue(query, anchorCandidates) {
   return [preferredAnchor, ...anchorCandidates.filter((candidate) => candidate.id !== preferredAnchor.id)];
 }
 
+function isUsableAnchor(anchor) {
+  return Boolean(
+    anchor?.sourceUrl &&
+    Number.isFinite(anchor?.latitude) &&
+    Number.isFinite(anchor?.longitude),
+  );
+}
+
 async function resolveAnchor(query, options = {}) {
   const anchorSearchHtml = await fetchSearchResults(query, options);
   const anchorCandidates = parseSearchResultsHtml(anchorSearchHtml);
@@ -93,10 +101,14 @@ async function resolveAnchor(query, options = {}) {
   for (const candidate of anchorQueue) {
     try {
       const anchorPanel = await fetchPlacePanel(candidate.id, options);
-      return {
-        anchor: normalizeAnchorPanel(anchorPanel, candidate),
-        anchorCandidates
-      };
+      const anchor = normalizeAnchorPanel(anchorPanel, candidate);
+
+      if (isUsableAnchor(anchor)) {
+        return {
+          anchor,
+          anchorCandidates
+        };
+      }
     } catch (error) {
       if (!/404/.test(String(error.message || error))) {
         throw error;
@@ -104,7 +116,7 @@ async function resolveAnchor(query, options = {}) {
     }
   }
 
-  throw new Error(`No Kakao Map place panel was available for ${query}.`);
+  throw new Error(`No usable Kakao Map place panel was available for ${query}.`);
 }
 
 function shouldRetryWithStationQuery(query, anchor) {
@@ -126,13 +138,7 @@ async function searchNearbyBarsByLocationQuery(locationQuery, options = {}) {
   if (shouldRetryWithStationQuery(query, anchor)) {
     try {
       const stationResolution = await resolveAnchor(`${query}역`, options);
-      if (
-        Number.isFinite(stationResolution.anchor.latitude) &&
-        Number.isFinite(stationResolution.anchor.longitude)
-      ) {
-        anchor = stationResolution.anchor;
-        anchorCandidates = stationResolution.anchorCandidates;
-      } else if (STATIONISH_CATEGORY_PATTERN.test(stationResolution.anchor.category)) {
+      if (isUsableAnchor(stationResolution.anchor)) {
         anchor = stationResolution.anchor;
         anchorCandidates = stationResolution.anchorCandidates;
       }
