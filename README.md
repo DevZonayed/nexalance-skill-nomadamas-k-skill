@@ -38,8 +38,8 @@ Claude code, codex, opencode 등 각종 코딩 에이전트 지원합니다.
 ## 처음 시작하는 순서
 
 1. [설치 방법](docs/install.md)을 따라 `k-skill` 전체 스킬을 먼저 설치합니다.
-2. 설치가 끝나면 `k-skill-setup` 스킬을 사용해 `sops + age`, 공통 secrets 파일, 런타임 주입 확인까지 진행합니다.
-3. 시크릿이 비어 있으면 값을 채팅에 붙여 넣지 말고, [공통 설정 가이드](docs/setup.md)와 [보안/시크릿 정책](docs/security-and-secrets.md)에 따라 로컬에 안전하게 등록합니다.
+2. 설치가 끝나면 `k-skill-setup` 스킬을 사용해 credential 확보와 환경변수 확인을 진행합니다.
+3. 시크릿이 비어 있으면 [공통 설정 가이드](docs/setup.md)와 [보안/시크릿 정책](docs/security-and-secrets.md)에 따라 credential resolution order로 확보합니다.
 4. Node/Python 패키지가 없으면 먼저 전역 설치를 기본으로 진행합니다.
 5. 각 기능 문서를 열어 입력값, 예시, 제한사항을 확인합니다.
 
@@ -48,7 +48,7 @@ Claude code, codex, opencode 등 각종 코딩 에이전트 지원합니다.
 | 문서 | 설명 |
 | --- | --- |
 | [설치 방법](docs/install.md) | 패키지 설치, 선택 설치, 로컬 테스트 방법 |
-| [공통 설정 가이드](docs/setup.md) | `sops + age` 설치, age key 생성, 공통 secrets 파일 준비 |
+| [공통 설정 가이드](docs/setup.md) | credential resolution order, 기본 secrets 파일 준비 |
 | [보안/시크릿 정책](docs/security-and-secrets.md) | 인증 정보 저장 원칙, 금지 패턴, 표준 환경변수 이름 |
 | [k-skill 프록시 서버 가이드](docs/features/k-skill-proxy.md) | 무료 API를 프록시 서버로 바로 호출하는 방법 |
 | [릴리스/배포 가이드](docs/releasing.md) | npm Changesets, Python release-please, trusted publishing 운영 규칙 |

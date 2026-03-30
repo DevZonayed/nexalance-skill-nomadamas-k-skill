@@ -37,5 +37,3 @@
 - CJ대한통운 배송상세 JSON: https://www.cjlogistics.com/ko/tool/parcel/tracking-detail
 - 우체국 배송조회: https://service.epost.go.kr/trace.RetrieveRegiPrclDeliv.postal?sid1=
 - 우체국 배송상세 HTML: https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm
-- SOPS docs: https://getsops.io/docs/
-- age: https://github.com/FiloSottile/age

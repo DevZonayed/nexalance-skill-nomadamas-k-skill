@@ -210,7 +210,7 @@ test("ktx-booking docs document the helper-based live Korail workflow", () => {
     assert.match(doc, /--include-no-seats/);
     assert.match(doc, /--include-waiting-list/);
     assert.match(doc, /--try-waiting/);
-    assert.match(doc, /sops exec-env/);
+    assert.match(doc, /credential resolution order|KSKILL_KTX_ID/);
     assert.match(doc, /anti-bot|Dynapath|x-dynapath-m-token/i);
     assert.match(doc, /결제(까지)?는 자동화하지 않는다|결제는 제외/);
     assert.doesNotMatch(doc, /예약 시 선택할 `--train-index`/);
