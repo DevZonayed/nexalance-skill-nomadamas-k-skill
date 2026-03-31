@@ -16,6 +16,7 @@ client/skill -> k-skill-proxy -> upstream public API
 
 - `GET /health`
 - `GET /v1/fine-dust/report`
+- `GET /v1/seoul-subway/arrival`
 - `GET /B552584/:service/:operation` (허용된 AirKorea route passthrough)
 
 ## 권장 환경변수
@@ -27,6 +28,7 @@ client/skill -> k-skill-proxy -> upstream public API
 프록시 서버 쪽:
 
 - `AIR_KOREA_OPEN_API_KEY=...`
+- `SEOUL_OPEN_API_KEY=...`
 - `KSKILL_PROXY_PORT=4020`
 
 ## PM2 + cloudflared
@@ -52,6 +54,13 @@ client/skill -> k-skill-proxy -> upstream public API
 ```bash
 curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/fine-dust/report' \
   --data-urlencode 'regionHint=서울 강남구'
+```
+
+서울 지하철 도착정보 endpoint:
+
+```bash
+curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/seoul-subway/arrival' \
+  --data-urlencode 'stationName=강남'
 ```
 
 AirKorea passthrough endpoint:

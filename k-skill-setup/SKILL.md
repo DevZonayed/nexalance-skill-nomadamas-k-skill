@@ -67,8 +67,8 @@ KSKILL_SRT_ID=replace-me
 KSKILL_SRT_PASSWORD=replace-me
 KSKILL_KTX_ID=replace-me
 KSKILL_KTX_PASSWORD=replace-me
-SEOUL_OPEN_API_KEY=replace-me
 AIR_KOREA_OPEN_API_KEY=replace-me
+KSKILL_PROXY_BASE_URL=https://k-skill-proxy.nomadamas.org
 EOF
 chmod 0600 ~/.config/k-skill/secrets.env
 ```
@@ -83,8 +83,8 @@ chmod 0600 ~/.config/k-skill/secrets.env
 
 - SRT: `KSKILL_SRT_ID`, `KSKILL_SRT_PASSWORD`
 - KTX: `KSKILL_KTX_ID`, `KSKILL_KTX_PASSWORD`
-- 서울 지하철: `SEOUL_OPEN_API_KEY`
-- 사용자 위치 미세먼지 조회: `AIR_KOREA_OPEN_API_KEY`
+- 서울 지하철: `KSKILL_PROXY_BASE_URL`
+- 사용자 위치 미세먼지 조회: `KSKILL_PROXY_BASE_URL` 또는 `AIR_KOREA_OPEN_API_KEY`
 
 시크릿이 비어 있다는 이유로 다른 서비스나 비공식 우회 경로를 자동 선택하지 않는다.
 

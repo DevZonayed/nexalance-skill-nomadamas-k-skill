@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { buildServer, proxyAirKoreaRequest } = require("../src/server");
+const { buildServer, proxyAirKoreaRequest, proxySeoulSubwayRequest } = require("../src/server");
 
 test("health endpoint stays public and reports auth/upstream status", async (t) => {
   const app = buildServer({
@@ -24,6 +24,7 @@ test("health endpoint stays public and reports auth/upstream status", async (t) 
   assert.equal(body.ok, true);
   assert.equal(body.auth.tokenRequired, false);
   assert.equal(body.upstreams.airKoreaConfigured, false);
+  assert.equal(body.upstreams.seoulOpenApiConfigured, false);
 });
 
 test("fine dust endpoint stays publicly callable without proxy auth", async (t) => {
@@ -175,4 +176,91 @@ test("public AirKorea passthrough route forwards allowed upstream responses", as
 
   assert.equal(response.statusCode, 200);
   assert.match(response.body, /resultCode/);
+});
+
+test("seoul subway endpoint stays publicly callable without proxy auth", async (t) => {
+  const originalFetch = global.fetch;
+  let calledUrl;
+  global.fetch = async (url) => {
+    calledUrl = String(url);
+    return new Response(
+      JSON.stringify({
+        errorMessage: {
+          status: 200,
+          code: "INFO-000",
+          message: "정상 처리되었습니다."
+        },
+        realtimeArrivalList: [
+          {
+            statnNm: "강남",
+            trainLineNm: "2호선",
+            updnLine: "내선",
+            arvlMsg2: "전역 출발",
+            arvlMsg3: "역삼",
+            barvlDt: "60"
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      }
+    );
+  };
+
+  const app = buildServer({
+    env: {
+      SEOUL_OPEN_API_KEY: "seoul-key"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/seoul-subway/arrival?stationName=%EA%B0%95%EB%82%A8"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().realtimeArrivalList[0].statnNm, "강남");
+  assert.match(calledUrl, /realtimeStationArrival\/0\/8\/%EA%B0%95%EB%82%A8$/);
+});
+
+test("seoul subway endpoint returns 503 when proxy server lacks Seoul API key", async (t) => {
+  const app = buildServer();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/seoul-subway/arrival?stationName=%EA%B0%95%EB%82%A8"
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error, "upstream_not_configured");
+});
+
+test("proxySeoulSubwayRequest injects API key and preserves index/station params", async () => {
+  let calledUrl;
+  const result = await proxySeoulSubwayRequest({
+    stationName: "강남",
+    startIndex: "2",
+    endIndex: "5",
+    apiKey: "test-seoul-key",
+    fetchImpl: async (url) => {
+      calledUrl = String(url);
+      return new Response('{"ok":true}', {
+        status: 200,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      });
+    }
+  });
+
+  assert.equal(result.statusCode, 200);
+  assert.match(calledUrl, /\/api\/subway\/test-seoul-key\/json\/realtimeStationArrival\/2\/5\/%EA%B0%95%EB%82%A8$/);
 });

@@ -157,6 +157,40 @@ test("repository docs advertise the kakaotalk-mac skill", () => {
   assert.match(install, /--skill kakaotalk-mac/);
 });
 
+test("seoul subway docs default to the public proxy-backed flow", () => {
+  const readme = read("README.md");
+  const setup = read(path.join("docs", "setup.md"));
+  const install = read(path.join("docs", "install.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const setupSkill = read(path.join("k-skill-setup", "SKILL.md"));
+  const skill = read(path.join("seoul-subway-arrival", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "seoul-subway-arrival.md"));
+  const proxyDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
+  const proxyReadme = read(path.join("packages", "k-skill-proxy", "README.md"));
+  const secretsExample = read(path.join("examples", "secrets.env.example"));
+
+  assert.match(readme, /\| 서울 지하철 도착정보 조회 \| .* \| 불필요 \|/);
+  assert.match(setup, /\| 서울 지하철 도착정보 조회 \| `KSKILL_PROXY_BASE_URL` \|/);
+  assert.match(install, /--skill seoul-subway-arrival/);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /KSKILL_PROXY_BASE_URL/);
+    assert.match(doc, /\/v1\/seoul-subway\/arrival/);
+    assert.match(doc, /사용자가 .*OpenAPI key.*직접.*필요가? 없다|개인 API key 없이/i);
+    assert.doesNotMatch(doc, /SEOUL_OPEN_API_KEY/);
+    assert.doesNotMatch(doc, /swopenAPI\.seoul\.go\.kr\/api\/subway\/\$\{SEOUL_OPEN_API_KEY\}/);
+  }
+
+  assert.match(proxyDoc, /GET \/v1\/seoul-subway\/arrival/);
+  assert.match(proxyDoc, /SEOUL_OPEN_API_KEY/);
+  assert.match(proxyReadme, /GET \/v1\/seoul-subway\/arrival/);
+  assert.match(proxyReadme, /SEOUL_OPEN_API_KEY/);
+  assert.match(security, /KSKILL_PROXY_BASE_URL/);
+  assert.match(setupSkill, /서울 지하철: `KSKILL_PROXY_BASE_URL`/);
+  assert.doesNotMatch(secretsExample, /SEOUL_OPEN_API_KEY/);
+  assert.match(secretsExample, /KSKILL_PROXY_BASE_URL=https:\/\/k-skill-proxy\.nomadamas\.org/);
+});
+
 test("kakaotalk-mac skill documents safe macOS kakaocli usage", () => {
   const skillPath = path.join(repoRoot, "kakaotalk-mac", "SKILL.md");
 
