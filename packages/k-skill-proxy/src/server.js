@@ -1,7 +1,8 @@
 const crypto = require("node:crypto");
 const Fastify = require("fastify");
 const { fetchFineDustReport } = require("./airkorea");
-const UPSTREAM_BASE_URL = "http://apis.data.go.kr";
+const AIR_KOREA_UPSTREAM_BASE_URL = "http://apis.data.go.kr";
+const SEOUL_OPEN_API_BASE_URL = "http://swopenapi.seoul.go.kr";
 const ALLOWED_AIRKOREA_ROUTES = new Map([
   ["MsrstnInfoInqireSvc", new Set(["getMsrstnList", "getNearbyMsrstnList", "getTMStdrCrdnt"])],
   ["ArpltnInforInqireSvc", new Set(["getMsrstnAcctoRltmMesureDnsty", "getCtprvnRltmMesureDnsty"])],
@@ -40,6 +41,7 @@ function buildConfig(env = process.env) {
     port: parseInteger(env.KSKILL_PROXY_PORT, 4020),
     proxyName: env.KSKILL_PROXY_NAME || "k-skill-proxy",
     airKoreaApiKey: trimOrNull(env.AIR_KOREA_OPEN_API_KEY),
+    seoulOpenApiKey: trimOrNull(env.SEOUL_OPEN_API_KEY),
     cacheTtlMs: parseInteger(env.KSKILL_PROXY_CACHE_TTL_MS, 300000),
     rateLimitWindowMs: parseInteger(env.KSKILL_PROXY_RATE_LIMIT_WINDOW_MS, 60000),
     rateLimitMax: parseInteger(env.KSKILL_PROXY_RATE_LIMIT_MAX, 60)
@@ -120,6 +122,26 @@ function normalizeFineDustQuery(query) {
   };
 }
 
+function normalizeSeoulSubwayQuery(query) {
+  const stationName = trimOrNull(query.stationName ?? query.station_name ?? query.station);
+  if (!stationName) {
+    throw new Error("Provide stationName.");
+  }
+
+  const startIndex = parseInteger(query.startIndex ?? query.start_index, 0);
+  const endIndex = parseInteger(query.endIndex ?? query.end_index, 8);
+
+  if (startIndex < 0 || endIndex < startIndex) {
+    throw new Error("Provide valid startIndex and endIndex.");
+  }
+
+  return {
+    stationName,
+    startIndex,
+    endIndex
+  };
+}
+
 function isAllowedAirKoreaRoute(service, operation) {
   return ALLOWED_AIRKOREA_ROUTES.get(service)?.has(operation) || false;
 }
@@ -147,7 +169,7 @@ async function proxyAirKoreaRequest({ service, operation, query, serviceKey, fet
     };
   }
 
-  const url = new URL(`${UPSTREAM_BASE_URL}/B552584/${service}/${operation}`);
+  const url = new URL(`${AIR_KOREA_UPSTREAM_BASE_URL}/B552584/${service}/${operation}`);
   for (const [key, value] of Object.entries(query || {})) {
     if (value === undefined || value === null || value === "" || key === "serviceKey") {
       continue;
@@ -165,6 +187,40 @@ async function proxyAirKoreaRequest({ service, operation, query, serviceKey, fet
   const response = await fetchImpl(url, {
     signal: AbortSignal.timeout(20000)
   });
+  return {
+    statusCode: response.status,
+    contentType: response.headers.get("content-type") || "application/json; charset=utf-8",
+    body: await response.text()
+  };
+}
+
+async function proxySeoulSubwayRequest({
+  stationName,
+  startIndex = 0,
+  endIndex = 8,
+  apiKey,
+  fetchImpl = global.fetch
+}) {
+  if (!apiKey) {
+    return {
+      statusCode: 503,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify({
+        error: "upstream_not_configured",
+        message: "SEOUL_OPEN_API_KEY is not configured on the proxy server."
+      })
+    };
+  }
+
+  const encodedStationName = encodeURIComponent(stationName);
+  const url = new URL(
+    `${SEOUL_OPEN_API_BASE_URL}/api/subway/${apiKey}/json/realtimeStationArrival/${startIndex}/${endIndex}/${encodedStationName}`
+  );
+
+  const response = await fetchImpl(url, {
+    signal: AbortSignal.timeout(20000)
+  });
+
   return {
     statusCode: response.status,
     contentType: response.headers.get("content-type") || "application/json; charset=utf-8",
@@ -202,7 +258,8 @@ function buildServer({ env = process.env, provider = null } = {}) {
     service: config.proxyName,
     port: config.port,
     upstreams: {
-      airKoreaConfigured: Boolean(config.airKoreaApiKey)
+      airKoreaConfigured: Boolean(config.airKoreaApiKey),
+      seoulOpenApiConfigured: Boolean(config.seoulOpenApiKey)
     },
     auth: {
       tokenRequired: false
@@ -284,6 +341,66 @@ function buildServer({ env = process.env, provider = null } = {}) {
     return payload;
   });
 
+  app.get("/v1/seoul-subway/arrival", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeSeoulSubwayQuery(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({
+      route: "seoul-subway-arrival",
+      ...normalized
+    });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return {
+        ...cached,
+        proxy: {
+          ...cached.proxy,
+          cache: {
+            hit: true,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    const upstream = await proxySeoulSubwayRequest({
+      ...normalized,
+      apiKey: config.seoulOpenApiKey
+    });
+
+    reply.code(upstream.statusCode);
+    reply.header("content-type", upstream.contentType);
+
+    if (!upstream.contentType.includes("json")) {
+      return upstream.body;
+    }
+
+    const payload = JSON.parse(upstream.body);
+    payload.proxy = {
+      name: config.proxyName,
+      cache: {
+        hit: false,
+        ttl_ms: config.cacheTtlMs
+      },
+      requested_at: new Date().toISOString()
+    };
+
+    if (upstream.statusCode >= 200 && upstream.statusCode < 300) {
+      cache.set(cacheKey, payload, config.cacheTtlMs);
+    }
+
+    return payload;
+  });
+
   app.setErrorHandler((error, request, reply) => {
     request.log.error(error);
     const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
@@ -324,6 +441,8 @@ module.exports = {
   buildConfig,
   buildServer,
   normalizeFineDustQuery,
+  normalizeSeoulSubwayQuery,
   proxyAirKoreaRequest,
+  proxySeoulSubwayRequest,
   startServer
 };
