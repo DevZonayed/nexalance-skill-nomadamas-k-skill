@@ -135,6 +135,7 @@ korean-law search_all --query "개인정보 처리방침 행정해석"
 - 한국 법령 관련 질의에 대해 `korean-law-mcp` 사용 경로가 선택되었다.
 - 필요한 검색/조회 명령이 정해졌다.
 - 법령/조문/판례/유권해석/자치법규 중 맞는 도구로 결과를 조회했다.
+- 유권해석이면 `search_interpretations`, 자치법규면 `search_ordinance` 까지 명시적으로 연결했다.
 - 로컬 경로라면 `LAW_OC` 확보 방법을 정확한 변수 이름으로 안내했다.
 - remote endpoint라면 사용자 `LAW_OC` 없이 `url` 등록 상태를 확인했다.
 

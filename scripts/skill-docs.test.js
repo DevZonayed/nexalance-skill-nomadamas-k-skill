@@ -1042,8 +1042,12 @@ test("korean-law-search skill keeps korean-law-mcp-only lookups while separating
   assert.ok(fs.existsSync(skillPath), "expected korean-law-search/SKILL.md to exist");
 
   const skill = read(path.join("korean-law-search", "SKILL.md"));
+  const doneSectionMatch = skill.match(/## Done when([\s\S]*?)## Notes/);
 
   assert.match(skill, /^name: korean-law-search$/m);
+  assert.ok(doneSectionMatch, "expected korean-law-search skill to include a Done when section");
+
+  const doneSection = doneSectionMatch[1];
 
   for (const doc of [skill, featureDoc]) {
     assert.match(doc, /반드시 .*korean-law-mcp|korean-law-mcp.*반드시/u);
@@ -1062,6 +1066,9 @@ test("korean-law-search skill keeps korean-law-mcp-only lookups while separating
     assert.doesNotMatch(doc, /packages\/korean-law-search/);
     assert.doesNotMatch(doc, /python-packages\/korean-law-search/);
   }
+
+  assert.match(doneSection, /search_interpretations/);
+  assert.match(doneSection, /search_ordinance/);
 
   assert.doesNotMatch(
     featureDoc,
