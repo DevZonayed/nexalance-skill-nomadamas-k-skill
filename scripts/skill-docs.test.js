@@ -101,6 +101,15 @@ test("root npm test script includes the skill docs regression suite", () => {
   assert.match(packageJson.scripts.test, /node --test scripts\/skill-docs\.test\.js/);
 });
 
+test("README advertises OpenClaw among the supported coding agents", () => {
+  const readme = read("README.md");
+
+  assert.match(
+    readme,
+    /Claude Code, Codex, OpenCode, OpenClaw\/ClawHub 등 각종 코딩 에이전트 지원합니다\./,
+  );
+});
+
 test("hwp skill documents environment-aware routing and supported operations", () => {
   const skillPath = path.join(repoRoot, "hwp", "SKILL.md");
 
@@ -155,6 +164,90 @@ test("repository docs advertise the kakaotalk-mac skill", () => {
   assert.match(readme, /\| 카카오톡 Mac CLI \|/);
   assert.match(readme, /\[카카오톡 Mac CLI\]\(docs\/features\/kakaotalk-mac\.md\)/);
   assert.match(install, /--skill kakaotalk-mac/);
+});
+
+test("repository docs advertise the used-car-price-search skill", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "used-car-price-search.md");
+  const skillPath = path.join(repoRoot, "used-car-price-search", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/used-car-price-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected used-car-price-search/SKILL.md to exist");
+  assert.match(readme, /\| 중고차 가격 조회 \|/);
+  assert.match(readme, /\[중고차 가격 조회 가이드\]\(docs\/features\/used-car-price-search\.md\)/);
+  assert.match(install, /--skill used-car-price-search/);
+  assert.match(
+    install,
+    /npm install -g @ohah\/hwpjs kbo-game kleague-results toss-securities k-lotto coupang-product-search used-car-price-search korean-law-mcp/,
+  );
+});
+
+test("used-car-price-search docs document the provider survey and SK direct surface", () => {
+  const skill = read(path.join("used-car-price-search", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "used-car-price-search.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /SK렌터카|SK렌터카 다이렉트|타고BUY/);
+    assert.match(doc, /롯데렌탈|롯데오토옥션/);
+    assert.match(doc, /레드캡렌터카/);
+    assert.match(doc, /MCP/i);
+    assert.match(doc, /Skill/i);
+    assert.match(doc, /https:\/\/www\.skdirect\.co\.kr\/tb/);
+    assert.match(doc, /__NEXT_DATA__/);
+    assert.match(doc, /인수가/);
+    assert.match(doc, /월\s*렌트료|월\s*요금|월\s*가격/);
+    assert.match(doc, /10회 이상|최소 10회/);
+  }
+
+  assert.match(featureDoc, /2026-04-02/);
+  assert.match(featureDoc, /inventory 규모는 시점에 따라 변동될 수/);
+  assert.doesNotMatch(featureDoc, /총 `\d+대`/);
+  assert.match(sources, /https:\/\/www\.skdirect\.co\.kr\/tb/);
+  assert.match(sources, /https:\/\/www\.lotteautoauction\.net\/hp\/pub\/cmm\/viewMain\.do/);
+  assert.match(sources, /https:\/\/biz\.redcap\.co\.kr\/rent\//);
+  assert.match(roadmap, /중고차 가격 조회 스킬 출시/);
+});
+
+test("seoul subway docs require an explicit proxy until the hosted route is live", () => {
+  const readme = read("README.md");
+  const setup = read(path.join("docs", "setup.md"));
+  const install = read(path.join("docs", "install.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const setupSkill = read(path.join("k-skill-setup", "SKILL.md"));
+  const skill = read(path.join("seoul-subway-arrival", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "seoul-subway-arrival.md"));
+  const proxyDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
+  const proxyReadme = read(path.join("packages", "k-skill-proxy", "README.md"));
+  const secretsExample = read(path.join("examples", "secrets.env.example"));
+
+  assert.match(readme, /\| 서울 지하철 도착정보 조회 \| .* \| 프록시 URL 필요 \|/);
+  assert.match(setup, /\| 서울 지하철 도착정보 조회 \| self-host 또는 배포 확인이 끝난 `KSKILL_PROXY_BASE_URL` \|/);
+  assert.match(install, /--skill seoul-subway-arrival/);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /KSKILL_PROXY_BASE_URL/);
+    assert.match(doc, /\/v1\/seoul-subway\/arrival/);
+    assert.match(doc, /사용자가 .*OpenAPI key.*직접.*필요(가|는)? 없다|개인 API key 없이/i);
+    assert.match(doc, /self-host|운영 중인 proxy|배포가 끝난 proxy/i);
+    assert.doesNotMatch(doc, /SEOUL_OPEN_API_KEY/);
+    assert.doesNotMatch(doc, /swopenAPI\.seoul\.go\.kr\/api\/subway\/\$\{SEOUL_OPEN_API_KEY\}/);
+    assert.doesNotMatch(doc, /기본값 `https:\/\/k-skill-proxy\.nomadamas\.org`/);
+    assert.doesNotMatch(doc, /없으면 hosted proxy .*기본/);
+  }
+
+  assert.match(proxyDoc, /GET \/v1\/seoul-subway\/arrival/);
+  assert.match(proxyDoc, /SEOUL_OPEN_API_KEY/);
+  assert.match(proxyReadme, /GET \/v1\/seoul-subway\/arrival/);
+  assert.match(proxyReadme, /SEOUL_OPEN_API_KEY/);
+  assert.match(security, /KSKILL_PROXY_BASE_URL/);
+  assert.match(security, /배포가 끝난 proxy|self-host/i);
+  assert.match(setupSkill, /서울 지하철: self-host 또는 배포 확인이 끝난 `KSKILL_PROXY_BASE_URL`/);
+  assert.doesNotMatch(secretsExample, /SEOUL_OPEN_API_KEY/);
+  assert.match(secretsExample, /KSKILL_PROXY_BASE_URL=https:\/\/your-proxy\.example\.com/);
+  assert.doesNotMatch(secretsExample, /KSKILL_PROXY_BASE_URL=https:\/\/k-skill-proxy\.nomadamas\.org/);
 });
 
 test("kakaotalk-mac skill documents safe macOS kakaocli usage", () => {
@@ -556,6 +649,33 @@ test("daiso-product-search docs record the shipped feature and official sources"
   assert.match(sources, /https:\/\/www\.daisomall\.co\.kr\/api\/pd\/pdh\/selStrPkupStck/);
 });
 
+test("repository docs advertise the coupang-product-search skill", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "coupang-product-search.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/coupang-product-search.md to exist");
+  assert.match(readme, /\| 쿠팡 상품 검색 \|/);
+  assert.match(readme, /\[쿠팡 상품 검색 가이드\]\(docs\/features\/coupang-product-search\.md\)/);
+  assert.match(install, /--skill coupang-product-search/);
+});
+
+test("coupang-product-search skill and docs reference coupang-mcp", () => {
+  const skillPath = path.join(repoRoot, "coupang-product-search", "SKILL.md");
+  const featureDoc = read(path.join("docs", "features", "coupang-product-search.md"));
+
+  assert.ok(fs.existsSync(skillPath), "expected coupang-product-search/SKILL.md to exist");
+
+  const skill = read(path.join("coupang-product-search", "SKILL.md"));
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /coupang-mcp/);
+    assert.match(doc, /yuju777-coupang-mcp\.hf\.space\/mcp/);
+    assert.match(doc, /search_coupang_products/);
+    assert.match(doc, /로켓배송/);
+  }
+});
+
 test("root pack:dry-run script covers all publishable workspaces", () => {
   const packageJson = readJson("package.json");
 
@@ -875,6 +995,20 @@ test("pack:dry-run includes the toss-securities workspace", () => {
   const packageJson = JSON.parse(read("package.json"));
 
   assert.match(packageJson.scripts["pack:dry-run"], /workspace toss-securities/);
+  assert.match(packageJson.scripts["pack:dry-run"], /workspace used-car-price-search/);
+});
+
+test("used-car-price-search ships with a changeset for release automation", () => {
+  const changesetDir = path.join(repoRoot, ".changeset");
+  const changesetFiles = fs
+    .readdirSync(changesetDir)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => read(path.join(".changeset", name)));
+
+  assert.ok(
+    changesetFiles.some((doc) => /["']used-car-price-search["']:\s*(patch|minor|major)/.test(doc)),
+    "expected a changeset entry that releases used-car-price-search",
+  );
 });
 
 test("package-lock captures the toss-securities workspace metadata for npm ci", () => {
@@ -888,4 +1022,96 @@ test("package-lock captures the toss-securities workspace metadata for npm ci", 
   assert.equal(packageLock.packages["packages/toss-securities"].version, "0.1.0");
   assert.equal(packageLock.packages["packages/toss-securities"].license, "MIT");
   assert.equal(packageLock.packages["packages/toss-securities"].engines.node, ">=18");
+});
+
+test("repository docs advertise the korean-law-search skill with mode-specific korean-law-mcp setup guidance", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const setup = read(path.join("docs", "setup.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const setupSkill = read(path.join("k-skill-setup", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "korean-law-search.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "korean-law-search.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/korean-law-search.md to exist");
+  assert.match(readme, /\| 한국 법령 검색 \|/);
+  assert.match(readme, /\[한국 법령 검색 가이드\]\(docs\/features\/korean-law-search\.md\)/);
+  assert.match(readme, /로컬 CLI\/MCP면 `LAW_OC` 필요, remote endpoint\/법망 fallback은 불필요/);
+  assert.match(readme, /법망 fallback/i);
+  assert.match(install, /--skill korean-law-search/);
+  assert.match(install, /로컬 CLI\/MCP 경로는 `LAW_OC`/);
+  assert.match(install, /remote endpoint는 `LAW_OC` 없이 `url`만/);
+  assert.match(setup, /한국 법령 검색의 로컬 CLI\/MCP 경로용 `LAW_OC`/);
+  assert.match(setup, /remote MCP endpoint는 사용자 `LAW_OC` 없이 `url`만으로 연결/);
+  assert.match(featureDoc, /로컬 CLI 또는 로컬 MCP server 경로는 `LAW_OC`/);
+  assert.match(featureDoc, /remote MCP endpoint는 사용자 `LAW_OC` 없이 `url`만으로 연결/);
+  assert.match(setupSkill, /로컬 한국 법령 검색: `LAW_OC` \+ `korean-law-mcp`/);
+  assert.match(setupSkill, /remote endpoint: 사용자 `LAW_OC` 없이 `url`만 등록/);
+
+  for (const doc of [setup, security, setupSkill]) {
+    assert.match(doc, /LAW_OC/);
+    assert.match(doc, /korean-law-mcp/);
+  }
+
+  assert.match(sources, /korean-law-mcp: https:\/\/github\.com\/chrisryugj\/korean-law-mcp/);
+  assert.match(sources, /beopmang: https:\/\/api\.beopmang\.org/);
+  assert.match(roadmap, /한국 법령 검색 스킬 출시/);
+});
+
+test("korean-law-search skill keeps korean-law-mcp-first guidance while documenting the approved Beopmang fallback", () => {
+  const skillPath = path.join(repoRoot, "korean-law-search", "SKILL.md");
+  const featureDoc = read(path.join("docs", "features", "korean-law-search.md"));
+  const examplesSecrets = read(path.join("examples", "secrets.env.example"));
+  const packageJson = readJson("package.json");
+
+  assert.ok(fs.existsSync(skillPath), "expected korean-law-search/SKILL.md to exist");
+
+  const skill = read(path.join("korean-law-search", "SKILL.md"));
+  const doneSectionMatch = skill.match(/## Done when([\s\S]*?)## Notes/);
+
+  assert.match(skill, /^name: korean-law-search$/m);
+  assert.ok(doneSectionMatch, "expected korean-law-search skill to include a Done when section");
+
+  const doneSection = doneSectionMatch[1];
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /korean-law-mcp.*먼저|먼저.*korean-law-mcp|항상 `korean-law-mcp`를 먼저 사용/u);
+    assert.match(doc, /npm install -g korean-law-mcp/);
+    assert.match(doc, /로컬 CLI 또는 로컬 MCP server 경로는 `LAW_OC`/);
+    assert.match(doc, /remote MCP endpoint는 사용자 `LAW_OC` 없이 `url`만으로 연결/);
+    assert.match(doc, /open\.law\.go\.kr/);
+    assert.match(doc, /search_law/);
+    assert.match(doc, /get_law_text/);
+    assert.match(doc, /search_precedents/);
+    assert.match(doc, /search_interpretations/);
+    assert.match(doc, /search_ordinance/);
+    assert.match(doc, /https:\/\/korean-law-mcp\.fly\.dev\/mcp/);
+    assert.match(doc, /법망|Beopmang/i);
+    assert.match(doc, /https:\/\/api\.beopmang\.org/);
+    assert.match(doc, /fallback/i);
+    assert.match(doc, /MCP/i);
+    assert.match(doc, /CLI/i);
+    assert.doesNotMatch(doc, /packages\/korean-law-search/);
+    assert.doesNotMatch(doc, /python-packages\/korean-law-search/);
+  }
+
+  assert.match(doneSection, /search_interpretations/);
+  assert.match(doneSection, /search_ordinance/);
+  assert.match(doneSection, /법망|Beopmang/i);
+  assert.match(doneSection, /fallback/i);
+
+  assert.doesNotMatch(
+    featureDoc,
+    /[ \t]+$/m,
+    "expected docs/features/korean-law-search.md to avoid trailing whitespace so git diff --check stays clean",
+  );
+
+  assert.match(examplesSecrets, /^LAW_OC=replace-me$/m);
+  assert.ok(
+    !packageJson.workspaces.some((workspace) => workspace.includes("korean-law")),
+    "expected no repo workspace to be added for korean-law-search",
+  );
+  assert.equal(fs.existsSync(path.join(repoRoot, "packages", "korean-law-search")), false);
 });

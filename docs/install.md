@@ -50,12 +50,15 @@ npx --yes skills add <owner/repo> \
   --skill toss-securities \
   --skill lotto-results \
   --skill kakaotalk-mac \
+  --skill korean-law-search \
   --skill fine-dust-location \
   --skill daiso-product-search \
   --skill blue-ribbon-nearby \
   --skill kakao-bar-nearby \
   --skill zipcode-search \
-  --skill delivery-tracking
+  --skill delivery-tracking \
+  --skill coupang-product-search \
+  --skill used-car-price-search
 ```
 
 인증이 필요한 기능만 부분 설치할 때도 `k-skill-setup` 은 같이 넣는다.
@@ -65,9 +68,24 @@ npx --yes skills add <owner/repo> \
   --skill k-skill-setup \
   --skill srt-booking \
   --skill ktx-booking \
+  --skill korean-law-search \
   --skill seoul-subway-arrival \
   --skill fine-dust-location
 ```
+
+`korean-law-search` 는 skill 설치 후 upstream CLI/MCP도 준비해야 한다.
+
+- 로컬 CLI/MCP 경로는 `LAW_OC` 를 채운다.
+- remote endpoint는 `LAW_OC` 없이 `url`만 등록한다.
+- 기존 `korean-law-mcp` 경로가 실패하면 `법망`(`https://api.beopmang.org`) fallback을 사용한다.
+
+```bash
+npm install -g korean-law-mcp
+export LAW_OC=your-api-key
+korean-law list
+```
+
+로컬 설치가 막히면 `https://korean-law-mcp.fly.dev/mcp` remote endpoint를 MCP 클라이언트에 등록한다. 그 경로도 응답하지 않거나 서비스 장애가 나면 `https://api.beopmang.org/mcp` 또는 `https://api.beopmang.org/api/v4/law?action=search` 를 fallback으로 사용한다.
 
 로컬 저장소에서 바로 전체 설치 테스트:
 
@@ -103,7 +121,7 @@ npm run ci
 ### Node 패키지
 
 ```bash
-npm install -g @ohah/hwpjs kbo-game kleague-results toss-securities k-lotto
+npm install -g @ohah/hwpjs kbo-game kleague-results toss-securities k-lotto coupang-product-search used-car-price-search korean-law-mcp
 export NODE_PATH="$(npm root -g)"
 ```
 
@@ -141,6 +159,7 @@ python3 -m pip install SRTrain korail2 pycryptodome
 - `ktx-booking`
 - `seoul-subway-arrival`
 - `fine-dust-location`
+- `korean-law-search`
 
 관련 문서:
 
