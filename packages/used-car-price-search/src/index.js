@@ -1,52 +1,32 @@
-const {
-  SK_DIRECT_USED_CAR_URL,
-  filterCarsByQuery,
-  normalizeUsedCarInventory,
-  summarizeMatches
-} = require("./parse")
+const skTagoBuy = require("./providers/sk-tagobuy")
+const { filterCarsByQuery, summarizeMatches } = require("./search")
 
-const DEFAULT_BROWSER_HEADERS = {
-  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "accept-language": "ko,en-US;q=0.9,en;q=0.8",
-  "user-agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+const providers = {
+  "sk-tagobuy": skTagoBuy
 }
 
-async function requestText(url, options = {}) {
-  const fetchImpl = options.fetchImpl || global.fetch
+const DEFAULT_PROVIDER = "sk-tagobuy"
 
-  if (typeof fetchImpl !== "function") {
-    throw new Error("A fetch implementation is required.")
+function resolveProvider(options = {}) {
+  const id = options.provider || DEFAULT_PROVIDER
+  const resolved = providers[id]
+
+  if (!resolved) {
+    const available = Object.keys(providers).join(", ")
+    throw new Error(`Unknown provider "${id}". Available: ${available}`)
   }
 
-  const response = await fetchImpl(url, {
-    headers: {
-      ...DEFAULT_BROWSER_HEADERS,
-      ...(options.headers || {})
-    },
-    signal: options.signal
-  })
-
-  if (!response.ok) {
-    throw new Error(`SK direct request failed with ${response.status} for ${url}`)
-  }
-
-  return response.text()
+  return resolved
 }
 
-async function fetchUsedCarInventory(options = {}) {
-  const html = await requestText(options.url || SK_DIRECT_USED_CAR_URL, options)
-  const inventory = normalizeUsedCarInventory(html)
-
-  return {
-    ...inventory,
-    fetchedAt: new Date().toISOString()
-  }
+async function fetchInventory(options = {}) {
+  const providerModule = resolveProvider(options)
+  return providerModule.fetchInventory(options)
 }
 
-async function lookupUsedCarPrices(query, options = {}) {
+async function lookupPrices(query, options = {}) {
   const limit = Number(options.limit || 10)
-  const inventory = await fetchUsedCarInventory(options)
+  const inventory = await fetchInventory(options)
   const allMatches = filterCarsByQuery(inventory.items, query)
   const matches = allMatches.slice(0, limit)
 
@@ -62,6 +42,10 @@ async function lookupUsedCarPrices(query, options = {}) {
 }
 
 module.exports = {
-  fetchUsedCarInventory,
-  lookupUsedCarPrices
+  providers,
+  fetchInventory,
+  lookupPrices,
+  // back-compat aliases
+  fetchUsedCarInventory: fetchInventory,
+  lookupUsedCarPrices: lookupPrices
 }

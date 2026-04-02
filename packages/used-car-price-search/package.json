@@ -26,7 +26,7 @@
     "price"
   ],
   "scripts": {
-    "lint": "node --check src/index.js && node --check src/parse.js && node --check test/index.test.js",
+    "lint": "node --check src/index.js && node --check src/search.js && node --check src/util.js && node --check src/providers/sk-tagobuy.js && node --check test/index.test.js",
     "test": "node --test"
   }
 }

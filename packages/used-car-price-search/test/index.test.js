@@ -4,14 +4,12 @@ const fs = require("node:fs")
 const path = require("node:path")
 
 const {
-  fetchUsedCarInventory,
-  lookupUsedCarPrices
+  providers,
+  fetchInventory,
+  lookupPrices
 } = require("../src/index")
-const {
-  extractNextData,
-  normalizeUsedCarInventory,
-  summarizeMatches
-} = require("../src/parse")
+const { extractNextData, parseInventory } = require("../src/providers/sk-tagobuy")
+const { summarizeMatches } = require("../src/search")
 
 const fixturesDir = path.join(__dirname, "fixtures")
 const inventoryHtml = fs.readFileSync(path.join(fixturesDir, "tb-page.html"), "utf8")
@@ -24,8 +22,8 @@ test("extractNextData reads the official Next.js inventory payload from SK direc
   assert.equal(nextData.props.pageProps.carListProd.length, 3)
 })
 
-test("normalizeUsedCarInventory exposes public used-car price fields", () => {
-  const inventory = normalizeUsedCarInventory(inventoryHtml)
+test("sk-tagobuy parseInventory exposes public used-car price fields", () => {
+  const inventory = parseInventory(inventoryHtml)
 
   assert.equal(inventory.provider.name, "SK렌터카 다이렉트 타고BUY")
   assert.equal(inventory.total, 3)
@@ -52,7 +50,7 @@ test("normalizeUsedCarInventory exposes public used-car price fields", () => {
 })
 
 test("summarizeMatches calculates price bands for matched cars", () => {
-  const inventory = normalizeUsedCarInventory(inventoryHtml)
+  const inventory = parseInventory(inventoryHtml)
   const summary = summarizeMatches(inventory.items)
 
   assert.deepEqual(summary, {
@@ -66,12 +64,12 @@ test("summarizeMatches calculates price bands for matched cars", () => {
   })
 })
 
-test("lookupUsedCarPrices filters the inventory by car keyword and sorts the cheapest buyout first", async () => {
+test("lookupPrices filters the inventory by car keyword and sorts the cheapest buyout first", async () => {
   const originalFetch = global.fetch
   global.fetch = async () => makeHtmlResponse(inventoryHtml)
 
   try {
-    const result = await lookupUsedCarPrices("현대 아반떼", { limit: 5 })
+    const result = await lookupPrices("현대 아반떼", { limit: 5 })
 
     assert.equal(result.query, "현대 아반떼")
     assert.equal(result.matchedCount, 1)
@@ -91,16 +89,16 @@ test("lookupUsedCarPrices filters the inventory by car keyword and sorts the che
   }
 })
 
-test("lookupUsedCarPrices returns a matched K3 result and a conservative empty result when nothing matches", async () => {
+test("lookupPrices returns a matched K3 result and a conservative empty result when nothing matches", async () => {
   const originalFetch = global.fetch
   global.fetch = async () => makeHtmlResponse(inventoryHtml)
 
   try {
-    const k3 = await lookupUsedCarPrices("K3", { limit: 5 })
+    const k3 = await lookupPrices("K3", { limit: 5 })
     assert.equal(k3.matchedCount, 1)
     assert.equal(k3.items[0].maker, "기아")
 
-    const nothing = await lookupUsedCarPrices("쏘렌토", { limit: 5 })
+    const nothing = await lookupPrices("쏘렌토", { limit: 5 })
     assert.equal(nothing.matchedCount, 0)
     assert.deepEqual(nothing.items, [])
     assert.equal(nothing.summary, null)
@@ -109,12 +107,12 @@ test("lookupUsedCarPrices returns a matched K3 result and a conservative empty r
   }
 })
 
-test("lookupUsedCarPrices reports summary and matchedCount from all matches before applying the item limit", async () => {
+test("lookupPrices reports summary and matchedCount from all matches before applying the item limit", async () => {
   const originalFetch = global.fetch
   global.fetch = async () => makeHtmlResponse(inventoryHtml)
 
   try {
-    const result = await lookupUsedCarPrices("현대", { limit: 1 })
+    const result = await lookupPrices("현대", { limit: 1 })
 
     assert.equal(result.matchedCount, 2)
     assert.equal(result.items.length, 1)
@@ -133,7 +131,7 @@ test("lookupUsedCarPrices reports summary and matchedCount from all matches befo
   }
 })
 
-test("fetchUsedCarInventory uses the official 타고BUY page and tolerates an empty inventory snapshot", async () => {
+test("fetchInventory uses the official 타고BUY page and tolerates an empty inventory snapshot", async () => {
   const originalFetch = global.fetch
   let requestedUrl = null
   global.fetch = async (url) => {
@@ -142,7 +140,7 @@ test("fetchUsedCarInventory uses the official 타고BUY page and tolerates an em
   }
 
   try {
-    const inventory = await fetchUsedCarInventory()
+    const inventory = await fetchInventory()
 
     assert.equal(requestedUrl, "https://www.skdirect.co.kr/tb")
     assert.equal(inventory.total, 0)
@@ -150,6 +148,21 @@ test("fetchUsedCarInventory uses the official 타고BUY page and tolerates an em
   } finally {
     global.fetch = originalFetch
   }
+})
+
+test("providers registry exposes sk-tagobuy by default", () => {
+  assert.ok(providers["sk-tagobuy"])
+  assert.equal(providers["sk-tagobuy"].provider.name, "SK렌터카 다이렉트 타고BUY")
+})
+
+test("fetchInventory rejects an unknown provider", async () => {
+  await assert.rejects(
+    () => fetchInventory({ provider: "nonexistent" }),
+    (err) => {
+      assert.match(err.message, /Unknown provider/)
+      return true
+    }
+  )
 })
 
 function makeHtmlResponse(body) {
