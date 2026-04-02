@@ -120,7 +120,7 @@ npm run ci
 ### Node 패키지
 
 ```bash
-npm install -g @ohah/hwpjs kbo-game kleague-results toss-securities k-lotto coupang-product-search korean-law-mcp
+npm install -g @ohah/hwpjs kbo-game kleague-results toss-securities k-lotto coupang-product-search used-car-price-search korean-law-mcp
 export NODE_PATH="$(npm root -g)"
 ```
 

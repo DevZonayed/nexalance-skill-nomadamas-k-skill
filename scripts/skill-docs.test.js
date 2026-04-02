@@ -177,6 +177,10 @@ test("repository docs advertise the used-car-price-search skill", () => {
   assert.match(readme, /\| 중고차 가격 조회 \|/);
   assert.match(readme, /\[중고차 가격 조회 가이드\]\(docs\/features\/used-car-price-search\.md\)/);
   assert.match(install, /--skill used-car-price-search/);
+  assert.match(
+    install,
+    /npm install -g @ohah\/hwpjs kbo-game kleague-results toss-securities k-lotto coupang-product-search used-car-price-search korean-law-mcp/,
+  );
 });
 
 test("used-car-price-search docs document the provider survey and SK direct surface", () => {
@@ -1023,6 +1027,19 @@ test("pack:dry-run includes the toss-securities workspace", () => {
 
   assert.match(packageJson.scripts["pack:dry-run"], /workspace toss-securities/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace used-car-price-search/);
+});
+
+test("used-car-price-search ships with a changeset for release automation", () => {
+  const changesetDir = path.join(repoRoot, ".changeset");
+  const changesetFiles = fs
+    .readdirSync(changesetDir)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => read(path.join(".changeset", name)));
+
+  assert.ok(
+    changesetFiles.some((doc) => /["']used-car-price-search["']:\s*(patch|minor|major)/.test(doc)),
+    "expected a changeset entry that releases used-car-price-search",
+  );
 });
 
 test("package-lock captures the toss-securities workspace metadata for npm ci", () => {
