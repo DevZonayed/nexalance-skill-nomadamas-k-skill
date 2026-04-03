@@ -31,6 +31,19 @@ $(document).ready(function(){
 </html>
 """
 
+SAMPLE_NO_ISSUES_HTML = """<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+<table id="tableMain">
+  <tr id="trMain">
+    <td id="tdBody" style="text-align: center;">맞춤법과 문법 오류를 찾지 못했습니다.<br></td>
+  </tr>
+</table>
+</body>
+</html>
+"""
+
 
 class SplitTextIntoChunksTest(unittest.TestCase):
     def test_prefers_paragraph_boundaries_before_falling_back(self):
@@ -76,6 +89,9 @@ class ExtractResultPayloadTest(unittest.TestCase):
         corrected = apply_page_corrections(pages[0])
 
         self.assertEqual(corrected, "아버지가 방에 들어가신다.")
+
+    def test_returns_empty_pages_when_service_reports_no_issues(self):
+        self.assertEqual(extract_result_payload(SAMPLE_NO_ISSUES_HTML), [])
 
 
 class CheckTextTest(unittest.TestCase):
@@ -236,6 +252,37 @@ pageIdx = 0;
         )
 
         self.assertEqual(report["corrected_text"], "아버지가 방에 들어가신다.\n\n\n  왠지 안 돼요.")
+
+    def test_check_text_accepts_no_issue_chunks_before_a_later_corrected_chunk(self):
+        error_html = """<!DOCTYPE html>
+<html>
+<body>
+<script>
+data = [{"str":"  아버지가방에들어가신다.","errInfo":[
+  {"help":"띄어쓰기 교정","errorIdx":0,"correctMethod":3,"start":0,"errMsg":"","end":13,"orgStr":"아버지가방에들어가신다","candWord":"아버지가 방에 들어가신다"}
+]}];
+pageIdx = 0;
+</script>
+</body>
+</html>
+"""
+
+        chunks = iter([SAMPLE_NO_ISSUES_HTML, SAMPLE_NO_ISSUES_HTML, error_html])
+        text = "첫 문장은 조금 길겠습니다. 둘째 문장도 길어요.\n\n\n  아버지가방에들어가신다.\n"
+
+        report = check_text(
+            text,
+            max_chars=18,
+            requester=lambda chunk, *, strong_rules, timeout: next(chunks),
+            throttle_seconds=0,
+        )
+
+        self.assertEqual(report["meta"]["chunk_count"], 3)
+        self.assertEqual(
+            report["corrected_text"],
+            "첫 문장은 조금 길겠습니다. 둘째 문장도 길어요.\n\n\n  아버지가 방에 들어가신다.\n",
+        )
+        self.assertEqual(len(report["issues"]), 1)
 
 
 class ParseArgsTest(unittest.TestCase):

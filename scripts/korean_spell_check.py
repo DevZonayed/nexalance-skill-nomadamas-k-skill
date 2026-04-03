@@ -18,6 +18,7 @@ DEFAULT_MAX_CHARS = 1500
 DEFAULT_TIMEOUT = 30
 DEFAULT_THROTTLE_SECONDS = 1.2
 RESULT_PAYLOAD_PATTERN = re.compile(r"data\s*=\s*(\[[\s\S]*?\]);\s*pageIdx\s*=")
+NO_ISSUES_PATTERN = re.compile(r"맞춤법과\s*문법\s*오류를\s*찾지\s*못했습니다", re.MULTILINE)
 TAG_PATTERN = re.compile(r"<[^>]+>")
 LINE_BREAK_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 SENTENCE_BOUNDARY_PATTERN = re.compile(r"(?<=[.!?。！？])\s+")
@@ -222,6 +223,8 @@ def extract_result_payload(html: str) -> list[dict]:
     match = RESULT_PAYLOAD_PATTERN.search(html)
 
     if not match:
+        if NO_ISSUES_PATTERN.search(html):
+            return []
         raise ValueError("Unable to find the spell-check payload in the returned HTML.")
 
     payload = json.loads(match.group(1))
