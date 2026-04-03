@@ -51,6 +51,7 @@ npx --yes skills add <owner/repo> \
   --skill lotto-results \
   --skill kakaotalk-mac \
   --skill korean-law-search \
+  --skill joseon-sillok-search \
   --skill fine-dust-location \
   --skill daiso-product-search \
   --skill blue-ribbon-nearby \
@@ -69,6 +70,7 @@ npx --yes skills add <owner/repo> \
   --skill srt-booking \
   --skill ktx-booking \
   --skill korean-law-search \
+  --skill joseon-sillok-search \
   --skill seoul-subway-arrival \
   --skill fine-dust-location
 ```
@@ -139,6 +141,18 @@ brew install tossctl
 
 ```bash
 python3 -m pip install SRTrain korail2 pycryptodome
+```
+
+한국어 맞춤법 검사 helper는 별도 외부 패키지 없이 표준 라이브러리 `python3` 만 있으면 된다.
+
+```bash
+python3 scripts/korean_spell_check.py --text "아버지가방에들어가신다."
+```
+
+조선왕조실록 검색 helper도 별도 외부 패키지 없이 표준 라이브러리 `python3` 만 있으면 된다.
+
+```bash
+python3 scripts/sillok_search.py --query "훈민정음" --king 세종 --year 1443
 ```
 
 운영체제 정책이나 권한 때문에 전역 설치가 막히면, 임의의 대체 구현으로 넘어가지 말고 그 차단 사유를 사용자에게 설명한 뒤 다음 설치 단계를 정합니다.
