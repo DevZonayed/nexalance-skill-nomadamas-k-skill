@@ -21,6 +21,7 @@ RESULT_PAYLOAD_PATTERN = re.compile(r"data\s*=\s*(\[[\s\S]*?\]);\s*pageIdx\s*=")
 TAG_PATTERN = re.compile(r"<[^>]+>")
 LINE_BREAK_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 SENTENCE_BOUNDARY_PATTERN = re.compile(r"(?<=[.!?。！？])\s+")
+PARAGRAPH_SEPARATOR_PATTERN = re.compile(r"\n(?:[ \t]*\n)+")
 
 DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -68,16 +69,16 @@ def parse_positive_int(raw_value: str) -> int:
 
 
 def split_text_into_chunks(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> list[str]:
-    normalized = str(text or "").strip()
-    if not normalized:
+    original = str(text or "")
+    if not original.strip():
         return []
 
-    paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", normalized) if paragraph.strip()]
+    units = split_paragraph_units(original)
     chunks: list[str] = []
     current = ""
 
-    for paragraph in paragraphs:
-        candidate = paragraph if not current else f"{current}\n\n{paragraph}"
+    for unit in units:
+        candidate = unit if not current else f"{current}{unit}"
 
         if len(candidate) <= max_chars:
             current = candidate
@@ -87,19 +88,33 @@ def split_text_into_chunks(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> lis
             chunks.append(current)
             current = ""
 
-        if len(paragraph) <= max_chars:
-            current = paragraph
+        if len(unit) <= max_chars:
+            current = unit
             continue
 
-        for sentence in split_long_paragraph(paragraph, max_chars=max_chars):
+        separator = ""
+        body = unit
+        separator_match = PARAGRAPH_SEPARATOR_PATTERN.search(unit)
+
+        if separator_match and separator_match.end() == len(paragraph):
+            separator = separator_match.group(0)
+            body = unit[: separator_match.start()]
+
+        for sentence in split_long_paragraph(body, max_chars=max_chars):
             if len(sentence) <= max_chars:
                 chunks.append(sentence)
                 continue
 
             start = 0
             while start < len(sentence):
-                chunks.append(sentence[start : start + max_chars].strip())
+                chunks.append(sentence[start : start + max_chars])
                 start += max_chars
+
+        if separator:
+            if chunks and len(chunks[-1]) + len(separator) <= max_chars:
+                chunks[-1] += separator
+            else:
+                current = separator
 
     if current:
         chunks.append(current)
@@ -107,17 +122,51 @@ def split_text_into_chunks(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> lis
     return chunks
 
 
-def split_long_paragraph(paragraph: str, *, max_chars: int) -> list[str]:
-    sentences = [sentence.strip() for sentence in SENTENCE_BOUNDARY_PATTERN.split(paragraph) if sentence.strip()]
+def split_paragraph_units(text: str) -> list[str]:
+    units: list[str] = []
+    start = 0
 
-    if len(sentences) <= 1:
-        return [paragraph.strip()]
+    for match in PARAGRAPH_SEPARATOR_PATTERN.finditer(text):
+        paragraph = text[start : match.start()]
+        separator = match.group(0)
+
+        if paragraph:
+            units.append(paragraph + separator)
+        elif units:
+            units[-1] += separator
+        else:
+            units.append(separator)
+
+        start = match.end()
+
+    tail = text[start:]
+    if tail:
+        units.append(tail)
+
+    return units
+
+
+def split_long_paragraph(paragraph: str, *, max_chars: int) -> list[str]:
+    sentence_boundaries = list(SENTENCE_BOUNDARY_PATTERN.finditer(paragraph))
+
+    if not sentence_boundaries:
+        return [paragraph]
+
+    sentences: list[str] = []
+    start = 0
+
+    for boundary in sentence_boundaries:
+        sentences.append(paragraph[start : boundary.end()])
+        start = boundary.end()
+
+    if start < len(paragraph):
+        sentences.append(paragraph[start:])
 
     groups: list[str] = []
     current = ""
 
     for sentence in sentences:
-        candidate = sentence if not current else f"{current} {sentence}"
+        candidate = sentence if not current else f"{current}{sentence}"
 
         if len(candidate) <= max_chars:
             current = candidate
@@ -227,27 +276,44 @@ def build_visible_text_index(text: str) -> tuple[str, list[int], list[int | None
     return "".join(visible_chars), visible_indices, visible_lookup
 
 
-def preserve_multiline_separators(original: str, suggestion: str) -> str:
+def preserve_original_layout(original: str, suggestion: str) -> str:
     if "\n" not in original:
         return suggestion
 
-    original_visible, _, _ = build_visible_text_index(original)
-    suggestion_visible, _, _ = build_visible_text_index(suggestion)
+    original_visible, original_visible_indices, _ = build_visible_text_index(original)
+    suggestion_visible, suggestion_visible_indices, _ = build_visible_text_index(suggestion)
 
     if original_visible != suggestion_visible:
         return suggestion
 
-    suggestion_chars = [char for char in suggestion if not char.isspace()]
+    if not original_visible_indices or not suggestion_visible_indices:
+        return original if original.strip() else suggestion
+
     merged: list[str] = []
-    suggestion_index = 0
+    leading_original = original[: original_visible_indices[0]]
+    leading_suggestion = suggestion[: suggestion_visible_indices[0]]
+    merged.append(leading_original if leading_original.isspace() else leading_suggestion)
 
-    for char in original:
-        if char.isspace():
-            merged.append(char)
-            continue
+    for ordinal, suggestion_index in enumerate(suggestion_visible_indices):
+        merged.append(suggestion[suggestion_index])
 
-        merged.append(suggestion_chars[suggestion_index])
-        suggestion_index += 1
+        next_original_index = original_visible_indices[ordinal + 1] if ordinal + 1 < len(original_visible_indices) else None
+        next_suggestion_index = (
+            suggestion_visible_indices[ordinal + 1] if ordinal + 1 < len(suggestion_visible_indices) else None
+        )
+
+        original_gap = (
+            original[original_visible_indices[ordinal] + 1 : next_original_index]
+            if next_original_index is not None
+            else original[original_visible_indices[ordinal] + 1 :]
+        )
+        suggestion_gap = (
+            suggestion[suggestion_index + 1 : next_suggestion_index]
+            if next_suggestion_index is not None
+            else suggestion[suggestion_index + 1 :]
+        )
+
+        merged.append(original_gap if "\n" in original_gap else suggestion_gap)
 
     return "".join(merged)
 
@@ -299,7 +365,7 @@ def apply_chunk_corrections(chunk: str, pages: list[dict]) -> str:
         page_offset += len(str(page.get("str", "")))
 
     if not replacements:
-        return fallback
+        return chunk
 
     corrected = chunk
 
@@ -314,7 +380,7 @@ def apply_chunk_corrections(chunk: str, pages: list[dict]) -> str:
                 slice_end -= 1
 
         original_slice = corrected[start:slice_end]
-        replacement = preserve_multiline_separators(original_slice, suggestion)
+        replacement = preserve_original_layout(original_slice, suggestion)
         corrected = f"{corrected[:start]}{replacement}{corrected[slice_end:]}"
 
     return corrected
@@ -376,8 +442,8 @@ def check_text(
                 issues.append(build_issue(chunk_index, page_index, issue_index, page, error))
 
     return {
-        "original_text": str(text or "").strip(),
-        "corrected_text": "\n\n".join(corrected_chunks),
+        "original_text": str(text or ""),
+        "corrected_text": "".join(corrected_chunks),
         "chunks": chunk_reports,
         "issues": issues,
         "meta": {

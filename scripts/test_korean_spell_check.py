@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import unittest
 
 from scripts.korean_spell_check import (
@@ -37,7 +38,22 @@ class SplitTextIntoChunksTest(unittest.TestCase):
 
         chunks = split_text_into_chunks(text, max_chars=15)
 
-        self.assertEqual(chunks, ["첫 문단입니다.", "둘째 문단입니다.", "셋째 문단입니다."])
+        self.assertEqual(chunks, ["첫 문단입니다.\n\n", "둘째 문단입니다.\n\n", "셋째 문단입니다."])
+        self.assertEqual("".join(chunks), text)
+
+    def test_preserves_exact_blank_runs_and_indentation_when_rejoined(self):
+        text = "아버지가방에들어가신다.\n\n\n  왠지 않되요."
+
+        chunks = split_text_into_chunks(text, max_chars=15)
+
+        self.assertEqual("".join(chunks), text)
+
+    def test_avoids_separator_only_chunks_when_a_paragraph_exactly_hits_the_limit(self):
+        text = "123456789012345\n\nabc"
+
+        chunks = split_text_into_chunks(text, max_chars=15)
+
+        self.assertEqual(chunks, ["123456789012345", "\n\nabc"])
 
 
 class ExtractResultPayloadTest(unittest.TestCase):
@@ -61,7 +77,44 @@ class CheckTextTest(unittest.TestCase):
 
         def fake_requester(chunk, *, strong_rules, timeout):
             requested_texts.append((chunk, strong_rules, timeout))
-            return SAMPLE_RESULTS_HTML.replace("아버지가방에들어가신다.", chunk)
+            payload = json.dumps(
+                [
+                    {
+                        "str": chunk,
+                        "errInfo": [
+                            {
+                                "help": "철자 검사를 해 보니 이 어절은 분석할 수 없으므로 틀린 말로 판단하였습니다.<br/><br/>후보 어절은 이 철자 검사/교정기에서 띄어쓰기, 붙여쓰기, 음절 대치와 같은 교정 방법에 따라 수정한 결과입니다.",
+                                "errorIdx": 0,
+                                "correctMethod": 3,
+                                "start": 0,
+                                "errMsg": "",
+                                "end": 11,
+                                "orgStr": "아버지가방에들어가신다",
+                                "candWord": "아버지가 방에 들어가신다",
+                            }
+                        ],
+                        "idx": 0,
+                    }
+                ],
+                ensure_ascii=False,
+            )
+            return f"""<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+<script type="text/javascript">
+$(document).ready(function(){{
+    data = {payload};
+    pageIdx = 0;
+    if(1){{
+        totalPageCnt = 1;
+    }}
+    data = eval(data);
+}});
+</script>
+</body>
+</html>
+"""
 
         report = check_text(
             "아버지가방에들어가신다.\n\n아버지가방에들어가신다.",
@@ -76,7 +129,7 @@ class CheckTextTest(unittest.TestCase):
         self.assertIsInstance(report["issues"][0], SpellCheckIssue)
         self.assertEqual(report["issues"][0].original, "아버지가방에들어가신다")
         self.assertEqual(report["issues"][0].suggestions[0], "아버지가 방에 들어가신다")
-        self.assertEqual(requested_texts[0][0], "아버지가방에들어가신다.")
+        self.assertEqual(requested_texts[0][0], "아버지가방에들어가신다.\n\n")
         self.assertTrue(all(call[1] for call in requested_texts))
 
     def test_check_text_preserves_blank_lines_when_payload_collapses_them(self):
@@ -128,6 +181,54 @@ pageIdx = 0;
         )
 
         self.assertEqual(report["corrected_text"], "아버지가 방에 들어가신다.\n\n왠지 안 돼요.")
+
+    def test_check_text_preserves_indent_and_triple_blank_lines_for_file_style_input(self):
+        html = """<!DOCTYPE html>
+<html>
+<body>
+<script>
+data = [{"str":"아버지가방에들어가신다.왠지 않되요.","errInfo":[
+  {"help":"띄어쓰기 교정","errorIdx":0,"correctMethod":3,"start":0,"errMsg":"","end":11,"orgStr":"아버지가방에들어가신다","candWord":"아버지가 방에 들어가신다"},
+  {"help":"활용형 교정","errorIdx":1,"correctMethod":3,"start":15,"errMsg":"","end":17,"orgStr":"않되요","candWord":"안 돼요"}
+]}];
+pageIdx = 0;
+</script>
+</body>
+</html>
+"""
+
+        report = check_text(
+            "아버지가방에들어가신다.\n\n\n  왠지 않되요.",
+            max_chars=50,
+            requester=lambda chunk, *, strong_rules, timeout: html,
+            throttle_seconds=0,
+        )
+
+        self.assertEqual(report["corrected_text"], "아버지가 방에 들어가신다.\n\n\n  왠지 안 돼요.")
+
+    def test_check_text_keeps_separator_layout_when_service_merges_spacing_across_boundary(self):
+        html = """<!DOCTYPE html>
+<html>
+<body>
+<script>
+data = [{"str":"아버지가방에들어가신다.  왠지 않되요.","errInfo":[
+  {"help":"공백 교정","errorIdx":0,"correctMethod":4,"start":0,"errMsg":"","end":16,"orgStr":"아버지가방에들어가신다.  왠지","candWord":"아버지가 방에 들어가신다. 왠지"},
+  {"help":"활용형 교정","errorIdx":1,"correctMethod":1,"start":17,"errMsg":"","end":20,"orgStr":"않되요","candWord":"안 돼요"}
+]}];
+pageIdx = 0;
+</script>
+</body>
+</html>
+"""
+
+        report = check_text(
+            "아버지가방에들어가신다.\n\n\n  왠지 않되요.",
+            max_chars=50,
+            requester=lambda chunk, *, strong_rules, timeout: html,
+            throttle_seconds=0,
+        )
+
+        self.assertEqual(report["corrected_text"], "아버지가 방에 들어가신다.\n\n\n  왠지 안 돼요.")
 
 
 class ParseArgsTest(unittest.TestCase):
