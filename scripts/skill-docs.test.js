@@ -698,6 +698,15 @@ test("repository docs advertise the olive-young-search skill across the document
   assert.match(sources, /https:\/\/mcp\.aka\.page\/api\/oliveyoung\/inventory/);
 });
 
+test("olive-young install docs warn about intermittent public endpoint failures and direct users to retry or clone fallback", () => {
+  const install = read(path.join("docs", "install.md"));
+
+  assert.match(install, /olive-young-search/);
+  assert.match(install, /5xx\/503/);
+  assert.match(install, /재시도|retry/i);
+  assert.match(install, /clone fallback|git clone https:\/\/github\.com\/hmmhmmhm\/daiso-mcp\.git/i);
+});
+
 test("olive-young-search skill documents the upstream daiso CLI flow for stores, products, and inventory", () => {
   const skillPath = path.join(repoRoot, "olive-young-search", "SKILL.md");
   const featureDoc = read(path.join("docs", "features", "olive-young-search.md"));
