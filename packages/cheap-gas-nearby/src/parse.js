@@ -192,8 +192,8 @@ function normalizeAnchorPanel(panel, searchItem = {}) {
     category: summary.category?.name3 || summary.category?.name2 || searchItem.category || "",
     address: summary.address?.disp || searchItem.address || "",
     phone: summary.phone_numbers?.[0]?.tel || searchItem.phone || null,
-    latitude: Number(summary.point?.lat),
-    longitude: Number(summary.point?.lon),
+    latitude: toNumber(summary.point?.lat),
+    longitude: toNumber(summary.point?.lon),
     sourceUrl: summary.confirm_id ? `https://place.map.kakao.com/${summary.confirm_id}` : null
   };
 }

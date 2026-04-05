@@ -107,21 +107,54 @@ async function fetchOpinetJson(url, options = {}) {
   return request(url, { ...options, headerSet: DEFAULT_JSON_HEADERS }, "json");
 }
 
+function rankAnchorCandidates(locationQuery, anchorCandidates) {
+  const selectedAnchor = selectAnchorCandidate(locationQuery, anchorCandidates);
+
+  return [selectedAnchor, ...anchorCandidates.filter((candidate) => candidate.id !== selectedAnchor.id)];
+}
+
+function hasFiniteAnchorCoordinates(anchor) {
+  return Number.isFinite(anchor?.latitude) && Number.isFinite(anchor?.longitude);
+}
+
 async function resolveAnchor(locationQuery, options = {}) {
   const anchorSearchHtml = await fetchSearchResults(locationQuery, options);
   const anchorCandidates = parseSearchResultsHtml(anchorSearchHtml);
-  const selectedAnchor = selectAnchorCandidate(locationQuery, anchorCandidates);
-  const anchorPanel = await fetchPlacePanel(selectedAnchor.id, options);
-  const anchor = normalizeAnchorPanel(anchorPanel, selectedAnchor);
+  const rankedCandidates = rankAnchorCandidates(locationQuery, anchorCandidates);
 
-  if (!Number.isFinite(anchor.latitude) || !Number.isFinite(anchor.longitude)) {
-    throw new Error(`Kakao Map anchor panel did not include coordinates for ${locationQuery}.`);
+  for (const candidate of rankedCandidates) {
+    try {
+      const anchorPanel = await fetchPlacePanel(candidate.id, options);
+      const anchor = normalizeAnchorPanel(anchorPanel, candidate);
+
+      if (hasFiniteAnchorCoordinates(anchor)) {
+        return {
+          anchor,
+          anchorCandidates
+        };
+      }
+    } catch (error) {
+      if (!/404/.test(String(error.message || error))) {
+        throw error;
+      }
+    }
   }
 
-  return {
-    anchor,
-    anchorCandidates
-  };
+  throw new Error(`No usable Kakao Map place panel was available for ${locationQuery}.`);
+}
+
+function normalizeCountOption(value, fallback, label, minimum = 0) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${label} must be a finite number.`);
+  }
+
+  return Math.max(minimum, parsed);
 }
 
 async function fetchAroundStations({ x, y, radius, productCode, apiKey, sort = 1 }, options = {}) {
@@ -165,8 +198,8 @@ async function searchCheapGasStationsByCoordinates(options = {}) {
   const longitude = Number(options.longitude);
   const radius = Number(options.radius ?? 1000);
   const productCode = options.productCode || "B027";
-  const limit = Math.max(1, Number(options.limit ?? 5));
-  const detailLimit = Math.max(0, Number(options.detailLimit ?? limit));
+  const limit = normalizeCountOption(options.limit, 5, "limit", 1);
+  const detailLimit = normalizeCountOption(options.detailLimit, limit, "detailLimit", 0);
   const apiKey = resolveApiKey(options);
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {

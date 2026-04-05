@@ -50,6 +50,25 @@ test("normalizeAnchorPanel keeps source URL and WGS84 coordinates", () => {
   assert.equal(item.sourceUrl, "https://place.map.kakao.com/1001");
 });
 
+test("normalizeAnchorPanel leaves missing Kakao coordinates unusable instead of coercing them to zero", () => {
+  const item = normalizeAnchorPanel(
+    {
+      ...anchorPanel,
+      summary: {
+        ...anchorPanel.summary,
+        point: {
+          lon: null,
+          lat: null
+        }
+      }
+    },
+    { id: "1001", name: "서울역", category: "기차역" },
+  );
+
+  assert.equal(item.latitude, null);
+  assert.equal(item.longitude, null);
+});
+
 test("wgs84ToKatec converts WGS84 coordinates into the KATEC values Opinet expects", () => {
   const { x, y } = wgs84ToKatec(37.55472, 126.97068);
 
@@ -154,6 +173,108 @@ test("searchCheapGasStationsByLocationQuery resolves the anchor, queries Opinet,
   assert.equal(result.meta.radius, 1000);
   assert.ok(calls.some((url) => url.includes("aroundAll.do")));
   assert.ok(calls.some((url) => url.includes("detailById.do") && url.includes("A1000001")));
+});
+
+test("searchCheapGasStationsByLocationQuery falls back to the next ranked Kakao anchor candidate when the first panel has no coordinates", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const resolved = String(url);
+    calls.push(resolved);
+
+    if (resolved.startsWith("https://m.map.kakao.com/actions/searchView?q=%EC%84%9C%EC%9A%B8%EC%97%AD")) {
+      return makeResponse(anchorSearchHtml, "text/html");
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/1001") {
+      return makeResponse(
+        {
+          ...anchorPanel,
+          summary: {
+            ...anchorPanel.summary,
+            point: {}
+          }
+        },
+        "application/json",
+      );
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/1002") {
+      return makeResponse(
+        {
+          ...anchorPanel,
+          summary: {
+            ...anchorPanel.summary,
+            confirm_id: "1002",
+            name: "서울역 1호선",
+            point: {
+              lon: 126.97253,
+              lat: 37.55513
+            },
+            address: {
+              disp: "서울 중구 봉래동2가"
+            },
+            phone_numbers: [
+              { tel: "02-0000-0000" }
+            ]
+          }
+        },
+        "application/json",
+      );
+    }
+
+    if (resolved.startsWith("https://www.opinet.co.kr/api/aroundAll.do?")) {
+      return makeResponse(aroundResponse, "application/json");
+    }
+
+    if (resolved.includes("detailById.do") && resolved.includes("id=A1000001")) {
+      return makeResponse(detailA1000001, "application/json");
+    }
+
+    throw new Error(`unexpected url: ${resolved}`);
+  };
+
+  const result = await searchCheapGasStationsByLocationQuery("서울역", {
+    apiKey: "test-opinet-key",
+    limit: 1,
+    detailLimit: 1,
+    fetchImpl
+  });
+
+  assert.equal(result.anchor.id, "1002");
+  assert.equal(result.anchor.name, "서울역 1호선");
+  assert.equal(result.anchor.latitude, 37.55513);
+  assert.equal(result.anchor.longitude, 126.97253);
+  assert.deepEqual(
+    calls.filter((url) => url.startsWith("https://place-api.map.kakao.com/places/panel3/")),
+    [
+      "https://place-api.map.kakao.com/places/panel3/1001",
+      "https://place-api.map.kakao.com/places/panel3/1002"
+    ]
+  );
+});
+
+test("searchCheapGasStationsByLocationQuery rejects non-numeric limit and detailLimit values instead of returning an empty list", async () => {
+  await assert.rejects(
+    searchCheapGasStationsByLocationQuery("37.55472,126.97068", {
+      apiKey: "test-opinet-key",
+      limit: "abc",
+      fetchImpl: async () => {
+        throw new Error("fetch should not run for invalid limit input");
+      }
+    }),
+    /limit must be a finite number/i,
+  );
+
+  await assert.rejects(
+    searchCheapGasStationsByLocationQuery("37.55472,126.97068", {
+      apiKey: "test-opinet-key",
+      detailLimit: "abc",
+      fetchImpl: async () => {
+        throw new Error("fetch should not run for invalid detailLimit input");
+      }
+    }),
+    /detailLimit must be a finite number/i,
+  );
 });
 
 function makeResponse(body, contentType) {
