@@ -6,7 +6,9 @@
 - 아파트 전월세 조회 (`get_apartment_rent`)
 - 오피스텔/연립다세대/단독주택/상업업무용 실거래가 조회
 - 지역코드 조회 (`get_region_code`) 후 행정구역 기준 검색
-- 청약홈/온비드 도구 연결
+- 청약홈 도구 연결
+- 온비드 코드/주소 조회
+- 온비드 입찰결과 도구 (`get_public_auction_items`, `get_public_auction_item_detail`)는 upstream README 기준 `⚠️ WIP` 상태로 preview 안내
 - hosted endpoint가 없을 때 self-host + Cloudflare Tunnel + launchd 운영
 
 ## 가장 중요한 규칙
@@ -27,6 +29,7 @@
 
 `DATA_GO_KR_API_KEY` 하나만 넣어도 기본 실거래가 조회는 시작할 수 있다.
 청약홈/온비드를 더 세밀하게 나누고 싶으면 upstream 문서대로 `ODCLOUD_API_KEY`, `ODCLOUD_SERVICE_KEY`, `ONBID_API_KEY` 를 추가한다.
+다만 `get_public_auction_items`, `get_public_auction_item_detail` 는 2026-04-05 기준 upstream README 에서 아직 `⚠️ WIP` 로 남아 있으므로, 안정 기능처럼 소개하지 말고 preview/실험 단계로만 설명한다.
 
 ## 가장 빠른 시작: Codex CLI stdio
 
@@ -111,17 +114,15 @@ cloudflared tunnel run real-estate-mcp
 
 ### 4. launchd로 자동 실행
 
-macOS 기준으로는 서버와 tunnel을 분리한 launchd 항목 두 개를 만든다.
+macOS 기준으로는 **launchd 를 tunnel 전용으로만** 쓰고, upstream 서버 컨테이너 재시작은 Docker 쪽에 맡긴다.
+upstream `docker/docker-compose.yml` 이 이미 `restart: unless-stopped` 를 설정하므로, `docker compose -f docker/docker-compose.yml up -d` 를 `RunAtLoad` + `KeepAlive` launchd job 에 넣으면 daemonize 직후 종료된 프로세스를 launchd 가 계속 다시 띄우는 restart loop가 생긴다.
 
-- `~/Library/LaunchAgents/com.kskill.real-estate-mcp.server.plist`
+따라서 서버 쪽은 Docker Desktop/Engine 자동 시작을 켜고 `docker compose ... up -d --build` 를 한 번 실행해 둔 뒤, `cloudflared tunnel run real-estate-mcp` 만 launchd 에 등록한다.
+
 - `~/Library/LaunchAgents/com.kskill.real-estate-mcp.tunnel.plist`
 
-둘 다 `RunAtLoad` 와 `KeepAlive` 를 켜고, 서버 쪽은 `docker compose -f docker/docker-compose.yml up -d`, tunnel 쪽은 `cloudflared tunnel run real-estate-mcp` 를 실행하게 둔다.
-
 ```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kskill.real-estate-mcp.server.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kskill.real-estate-mcp.tunnel.plist
-launchctl enable gui/$(id -u)/com.kskill.real-estate-mcp.server
 launchctl enable gui/$(id -u)/com.kskill.real-estate-mcp.tunnel
 ```
 

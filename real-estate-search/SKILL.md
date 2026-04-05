@@ -24,7 +24,7 @@ metadata:
 - 단독/다가구 매매/전월세: `get_single_house_trades`, `get_single_house_rent`
 - 상업업무용 매매: `get_commercial_trade`
 - 청약홈 분양/당첨: `get_apt_subscription_info`, `get_apt_subscription_results`
-- 공공경매/온비드: `get_public_auction_items`, `get_public_auction_item_detail`
+- 공공경매/온비드 입찰결과: `get_public_auction_items`, `get_public_auction_item_detail` (`⚠️ WIP`, upstream README 기준)
 - 지역코드 조회: `get_region_code`
 
 ## When to use
@@ -52,6 +52,7 @@ metadata:
 
 `DATA_GO_KR_API_KEY` 하나만 넣어도 기본 부동산 조회는 시작할 수 있다.
 청약홈/온비드 키를 분리하고 싶으면 upstream 문서대로 `ODCLOUD_API_KEY`, `ODCLOUD_SERVICE_KEY`, `ONBID_API_KEY` 를 추가한다.
+다만 `get_public_auction_items`, `get_public_auction_item_detail` 는 2026-04-05 기준 upstream README 에서 아직 `⚠️ WIP` 로 표시돼 있으니, production-ready 라고 단정하지 않고 preview 성격으로만 안내한다.
 
 ## Codex CLI setup (stdio)
 
@@ -164,27 +165,10 @@ public 인터넷에 노출한다면 upstream `docs/setup-oauth.md` 대로 `AUTH_
 
 ### 3. macOS launchd 자동 실행
 
-부팅 후 안정적으로 다시 뜨게 하려면 upstream 서버와 tunnel을 각각 launchd 로 올린다.
+부팅 후 안정적으로 다시 뜨게 하려면 **launchd 는 Cloudflare Tunnel만 담당**하게 두고, upstream 서버 컨테이너는 Docker 쪽 재시작 정책에 맡긴다.
+`docker/docker-compose.yml` 에 이미 `restart: unless-stopped` 가 들어 있으므로, `docker compose ... up -d` 를 `RunAtLoad` + `KeepAlive` launchd job 으로 감싸면 오히려 즉시 종료된 프로세스를 launchd 가 반복 재실행하게 된다.
 
-`~/Library/LaunchAgents/com.kskill.real-estate-mcp.server.plist`
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-  <dict>
-    <key>Label</key><string>com.kskill.real-estate-mcp.server</string>
-    <key>ProgramArguments</key>
-    <array>
-      <string>/bin/zsh</string>
-      <string>-lc</string>
-      <string>cd $HOME/src/real-estate-mcp && docker compose -f docker/docker-compose.yml up -d</string>
-    </array>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
-  </dict>
-</plist>
-```
+즉, 서버 쪽은 Docker Desktop/Engine 이 로그인 후 자동 기동되도록 설정한 다음 위의 `docker compose ... up -d --build` 를 한 번 실행해 두고, macOS launchd 에는 long-running 프로세스인 `cloudflared tunnel run ...` 만 등록한다.
 
 `~/Library/LaunchAgents/com.kskill.real-estate-mcp.tunnel.plist`
 
@@ -208,13 +192,11 @@ public 인터넷에 노출한다면 upstream `docs/setup-oauth.md` 대로 `AUTH_
 ```
 
 ```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kskill.real-estate-mcp.server.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kskill.real-estate-mcp.tunnel.plist
-launchctl enable gui/$(id -u)/com.kskill.real-estate-mcp.server
 launchctl enable gui/$(id -u)/com.kskill.real-estate-mcp.tunnel
 ```
 
-위 예시는 macOS 기준이다. Linux/Windows에서는 systemd 또는 서비스 관리자로 같은 역할을 분리해서 등록한다.
+위 예시는 macOS 기준이다. Linux/Windows에서는 Docker 서비스 자동 시작 + systemd/서비스 관리자로 tunnel 같은 long-running 프로세스를 따로 등록한다.
 
 ## Response policy
 

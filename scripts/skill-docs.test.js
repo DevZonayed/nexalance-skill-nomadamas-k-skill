@@ -1257,6 +1257,30 @@ test("repository docs advertise the real-estate-search skill and upstream self-h
   assert.equal(fs.existsSync(path.join(repoRoot, "packages", "real-estate-search")), false);
 });
 
+test("real-estate-search docs keep the upstream Onbid WIP caveat and avoid launchd daemonize loops", () => {
+  const featureDoc = read(path.join("docs", "features", "real-estate-search.md"));
+  const skill = read(path.join("real-estate-search", "SKILL.md"));
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /get_public_auction_items/);
+    assert.match(doc, /get_public_auction_item_detail/);
+    assert.match(doc, /WIP|작업 중|준비 중/);
+  }
+
+  const skillLaunchdSection = skill.match(/##\s+.*launchd[\s\S]*?(?=\n##\s+|\n#\s+|$)/i)?.[0];
+  const featureLaunchdSection = featureDoc.match(/###+\s+.*launchd[\s\S]*?(?=\n##\s+|\n#\s+|$)/i)?.[0];
+
+  assert.ok(skillLaunchdSection, "expected skill launchd section");
+  assert.ok(featureLaunchdSection, "expected feature guide launchd section");
+
+  for (const section of [skillLaunchdSection, featureLaunchdSection]) {
+    assert.doesNotMatch(section, /com\.kskill\.real-estate-mcp\.server/);
+    assert.doesNotMatch(section, /launchctl .*real-estate-mcp\.server/i);
+    assert.match(section, /restart:\s*unless-stopped|Docker (Desktop|Engine).*재기동|Docker.*자동 재시작/i);
+    assert.match(section, /cloudflared[\s\S]*tunnel[\s\S]*run[\s\S]*real-estate-mcp/i);
+  }
+});
+
 test("repository docs advertise the shipped korean-spell-check helper assets", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
