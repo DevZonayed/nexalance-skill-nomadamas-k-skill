@@ -1301,10 +1301,11 @@ test("repository docs advertise the shipped korean-spell-check helper assets", (
   assert.match(install, /python3 scripts\/korean_spell_check\.py/);
 });
 
-test("repository docs advertise the han-river-water-level skill and hosted proxy workflow", () => {
+test("repository docs advertise the han-river-water-level skill and rollout-pending proxy workflow", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
   const setup = read(path.join("docs", "setup.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
   const proxyDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
   const proxyReadme = read(path.join("packages", "k-skill-proxy", "README.md"));
   const featureDocPath = path.join(repoRoot, "docs", "features", "han-river-water-level.md");
@@ -1322,12 +1323,17 @@ test("repository docs advertise the han-river-water-level skill and hosted proxy
   assert.match(install, /--skill han-river-water-level/);
 
   for (const doc of [skill, featureDoc]) {
-    assert.match(doc, /https:\/\/k-skill-proxy\.nomadamas\.org\/v1\/han-river\/water-level/);
+    assert.match(doc, /\/v1\/han-river\/water-level/);
     assert.match(doc, /stationName|station_code|stationCode/);
     assert.match(doc, /수위|유량/);
     assert.match(doc, /ServiceKey|API key/);
     assert.match(doc, /candidate_stations|ambiguous_station/);
+    assert.match(doc, /KSKILL_PROXY_BASE_URL|self-host|로컬 proxy/);
+    assert.match(doc, /배포 확인이 끝나기 전|배포 전|pending deployment/);
   }
+
+  assert.doesNotMatch(skill, /기본적으로 `https:\/\/k-skill-proxy\.nomadamas\.org\/v1\/han-river\/water-level`/);
+  assert.doesNotMatch(featureDoc, /기본 hosted 조회:/);
 
   for (const doc of [proxyDoc, proxyReadme]) {
     assert.match(doc, /\/v1\/han-river\/water-level/);
@@ -1337,6 +1343,8 @@ test("repository docs advertise the han-river-water-level skill and hosted proxy
   }
 
   assert.match(setup, /한강 수위 정보 조회 \| 사용자 시크릿 불필요/);
+  assert.match(setup, /한강 수위 정보도 hosted public route rollout 이 끝나기 전까지 .*KSKILL_PROXY_BASE_URL/);
+  assert.match(security, /KSKILL_PROXY_BASE_URL.*서울 지하철.*한강 수위.*route가 실제 배포된 proxy URL/);
   assert.match(sources, /hrfco\.go\.kr\/web\/openapiPage\/reference\.do/);
   assert.match(sources, /api\.hrfco\.go\.kr/);
   assert.match(roadmap, /한강 수위 정보 조회 스킬 출시/);

@@ -68,7 +68,7 @@ curl -fsS --get 'http://127.0.0.1:4020/v1/seoul-subway/arrival' \
 한강 수위 정보 endpoint:
 
 ```bash
-curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/han-river/water-level' \
+curl -fsS --get 'https://your-proxy.example.com/v1/han-river/water-level' \
   --data-urlencode 'stationName=한강대교'
 ```
 
@@ -91,3 +91,4 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/B552584/ArpltnInforInqireSv
 - upstream key는 프록시 서버에서만 관리합니다.
 - client 쪽에는 upstream API key를 배포하지 않습니다.
 - public hosted route rollout 이 끝나기 전에는 서울 지하철 예시를 local/self-host URL 로 검증합니다.
+- public hosted route rollout 이 끝나기 전에는 한강 수위 route도 local/self-host 또는 배포 확인이 끝난 proxy URL 로 검증합니다.
