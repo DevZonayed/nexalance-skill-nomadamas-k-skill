@@ -165,8 +165,8 @@ function scoreAnchorCandidate(query, item) {
   return score;
 }
 
-function selectAnchorCandidate(query, items) {
-  const ranked = [...(items || [])].sort((left, right) => {
+function rankAnchorCandidates(query, items) {
+  return [...(items || [])].sort((left, right) => {
     const scoreDelta = scoreAnchorCandidate(query, right) - scoreAnchorCandidate(query, left);
 
     if (scoreDelta !== 0) {
@@ -175,6 +175,10 @@ function selectAnchorCandidate(query, items) {
 
     return left.name.localeCompare(right.name, "ko");
   });
+}
+
+function selectAnchorCandidate(query, items) {
+  const ranked = rankAnchorCandidates(query, items);
 
   if (ranked.length === 0) {
     throw new Error("No Kakao Map place candidate matched that location query.");
@@ -436,6 +440,7 @@ module.exports = {
   normalizeDetailItem,
   parseAroundResponse,
   parseSearchResultsHtml,
+  rankAnchorCandidates,
   selectAnchorCandidate,
   sortStationsByPriceAndDistance,
   wgs84ToKatec

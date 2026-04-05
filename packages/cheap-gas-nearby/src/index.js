@@ -4,6 +4,7 @@ const {
   normalizeDetailItem,
   parseAroundResponse,
   parseSearchResultsHtml,
+  rankAnchorCandidates,
   selectAnchorCandidate,
   sortStationsByPriceAndDistance,
   wgs84ToKatec
@@ -105,12 +106,6 @@ async function fetchPlacePanel(confirmId, options = {}) {
 
 async function fetchOpinetJson(url, options = {}) {
   return request(url, { ...options, headerSet: DEFAULT_JSON_HEADERS }, "json");
-}
-
-function rankAnchorCandidates(locationQuery, anchorCandidates) {
-  const selectedAnchor = selectAnchorCandidate(locationQuery, anchorCandidates);
-
-  return [selectedAnchor, ...anchorCandidates.filter((candidate) => candidate.id !== selectedAnchor.id)];
 }
 
 function hasFiniteAnchorCoordinates(anchor) {

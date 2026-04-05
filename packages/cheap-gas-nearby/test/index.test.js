@@ -253,6 +253,95 @@ test("searchCheapGasStationsByLocationQuery falls back to the next ranked Kakao 
   );
 });
 
+test("searchCheapGasStationsByLocationQuery keeps score-ranked Kakao fallback order after the best panel fails", async () => {
+  const gangnamSearchHtml = `
+    <ul>
+      <li class="search_item base" data-id="2001" data-title="강남대로">
+        <strong class="tit_g">강남대로</strong>
+        <span class="txt_ginfo">거리</span>
+        <span class="txt_g">서울 강남구</span>
+      </li>
+      <li class="search_item base" data-id="2002" data-title="강남역">
+        <strong class="tit_g">강남역</strong>
+        <span class="txt_ginfo">지하철역</span>
+        <span class="txt_g">서울 강남구 역삼동</span>
+      </li>
+      <li class="search_item base" data-id="2003" data-title="강남역 11번출구">
+        <strong class="tit_g">강남역 11번출구</strong>
+        <span class="txt_ginfo">지하철역</span>
+        <span class="txt_g">서울 강남구 역삼동</span>
+      </li>
+    </ul>
+  `;
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const resolved = String(url);
+    calls.push(resolved);
+
+    if (resolved.startsWith("https://m.map.kakao.com/actions/searchView?q=%EA%B0%95%EB%82%A8%EC%97%AD")) {
+      return makeResponse(gangnamSearchHtml, "text/html");
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/2002") {
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/2003") {
+      return makeResponse(
+        {
+          summary: {
+            confirm_id: "2003",
+            name: "강남역 11번출구",
+            category: {
+              name3: "지하철역"
+            },
+            address: {
+              disp: "서울 강남구 역삼동"
+            },
+            point: {
+              lon: 127.028,
+              lat: 37.498
+            }
+          }
+        },
+        "application/json",
+      );
+    }
+
+    if (resolved.startsWith("https://www.opinet.co.kr/api/aroundAll.do?")) {
+      return makeResponse(aroundResponse, "application/json");
+    }
+
+    if (resolved.includes("detailById.do") && resolved.includes("id=A1000001")) {
+      return makeResponse(detailA1000001, "application/json");
+    }
+
+    throw new Error(`unexpected url: ${resolved}`);
+  };
+
+  const result = await searchCheapGasStationsByLocationQuery("강남역", {
+    apiKey: "test-opinet-key",
+    limit: 1,
+    detailLimit: 1,
+    fetchImpl
+  });
+
+  assert.equal(result.anchor.id, "2003");
+  assert.equal(result.anchor.name, "강남역 11번출구");
+  assert.deepEqual(
+    calls.filter((url) => url.startsWith("https://place-api.map.kakao.com/places/panel3/")),
+    [
+      "https://place-api.map.kakao.com/places/panel3/2002",
+      "https://place-api.map.kakao.com/places/panel3/2003"
+    ]
+  );
+});
+
 test("searchCheapGasStationsByLocationQuery rejects non-numeric limit and detailLimit values instead of returning an empty list", async () => {
   await assert.rejects(
     searchCheapGasStationsByLocationQuery("37.55472,126.97068", {
