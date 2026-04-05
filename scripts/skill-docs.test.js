@@ -1195,6 +1195,100 @@ test("joseon-sillok-search install payload includes the documented helper comman
   }
 });
 
+test("repository docs advertise the real-estate-search skill and upstream self-host guidance", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const setup = read(path.join("docs", "setup.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const setupSkill = read(path.join("k-skill-setup", "SKILL.md"));
+  const examplesSecrets = read(path.join("examples", "secrets.env.example"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "real-estate-search.md");
+  const featureDoc = read(path.join("docs", "features", "real-estate-search.md"));
+  const skillPath = path.join(repoRoot, "real-estate-search", "SKILL.md");
+  const skill = read(path.join("real-estate-search", "SKILL.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const packageJson = readJson("package.json");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/real-estate-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected real-estate-search/SKILL.md to exist");
+
+  assert.match(readme, /\| 한국 부동산 실거래가 조회 \|/);
+  assert.match(readme, /\[한국 부동산 실거래가 조회 가이드\]\(docs\/features\/real-estate-search\.md\)/);
+  assert.match(install, /--skill real-estate-search/);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /https:\/\/github\.com\/tae0y\/real-estate-mcp\/tree\/main/);
+    assert.match(doc, /DATA_GO_KR_API_KEY/);
+    assert.match(doc, /get_apartment_trades/);
+    assert.match(doc, /get_apartment_rent/);
+    assert.match(doc, /get_region_code/);
+    assert.match(doc, /Codex CLI|Claude Desktop/);
+    assert.match(doc, /Cloudflare Tunnel/i);
+    assert.match(doc, /launchd/i);
+    assert.match(doc, /uv run/);
+    assert.match(doc, /cloudflared tunnel/i);
+    assert.doesNotMatch(doc, /packages\/real-estate-search/);
+    assert.doesNotMatch(doc, /python-packages\/real-estate-search/);
+  }
+
+  for (const doc of [install]) {
+    assert.match(doc, /https:\/\/github\.com\/tae0y\/real-estate-mcp\/tree\/main/);
+    assert.match(doc, /DATA_GO_KR_API_KEY/);
+    assert.match(doc, /Codex CLI/);
+    assert.match(doc, /Cloudflare Tunnel/i);
+    assert.match(doc, /launchd/i);
+    assert.match(doc, /uv run/);
+    assert.match(doc, /cloudflared tunnel/i);
+  }
+
+  for (const doc of [setup, security, setupSkill]) {
+    assert.match(doc, /DATA_GO_KR_API_KEY/);
+    assert.match(doc, /real-estate-mcp/);
+  }
+
+  assert.match(examplesSecrets, /^DATA_GO_KR_API_KEY=replace-me$/m);
+  assert.match(sources, /real-estate-mcp: https:\/\/github\.com\/tae0y\/real-estate-mcp\/tree\/main/);
+  assert.match(roadmap, /한국 부동산 실거래가 조회 스킬 출시/);
+  assert.ok(
+    !packageJson.workspaces.some((workspace) => workspace.includes("real-estate-search")),
+    "expected no repo workspace to be added for real-estate-search",
+  );
+  assert.equal(fs.existsSync(path.join(repoRoot, "packages", "real-estate-search")), false);
+});
+
+test("real-estate-search docs keep the upstream Onbid WIP caveat and avoid launchd daemonize loops", () => {
+  const featureDoc = read(path.join("docs", "features", "real-estate-search.md"));
+  const installDoc = read(path.join("docs", "install.md"));
+  const skill = read(path.join("real-estate-search", "SKILL.md"));
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /get_public_auction_items/);
+    assert.match(doc, /get_public_auction_item_detail/);
+    assert.match(doc, /WIP|작업 중|준비 중/);
+  }
+
+  const skillLaunchdSection = skill.match(/##\s+.*launchd[\s\S]*?(?=\n##\s+|\n#\s+|$)/i)?.[0];
+  const featureLaunchdSection = featureDoc.match(/###+\s+.*launchd[\s\S]*?(?=\n##\s+|\n#\s+|$)/i)?.[0];
+
+  assert.ok(skillLaunchdSection, "expected skill launchd section");
+  assert.ok(featureLaunchdSection, "expected feature guide launchd section");
+
+  for (const section of [skillLaunchdSection, featureLaunchdSection]) {
+    assert.doesNotMatch(section, /com\.kskill\.real-estate-mcp\.server/);
+    assert.doesNotMatch(section, /launchctl .*real-estate-mcp\.server/i);
+    assert.match(section, /restart:\s*unless-stopped|Docker (Desktop|Engine).*재기동|Docker.*자동 재시작/i);
+    assert.match(section, /cloudflared[\s\S]*tunnel[\s\S]*run[\s\S]*real-estate-mcp/i);
+  }
+
+  assert.doesNotMatch(installDoc, /launchd\s*로\s*서버\/터널을?\s*자동 실행/i);
+  assert.match(installDoc, /launchd[\s\S]*(Cloudflare Tunnel|터널).*(만|전용)/i);
+  assert.match(
+    installDoc,
+    /restart:\s*unless-stopped|Docker (Desktop|Engine).*재기동|Docker.*자동 재시작/i,
+  );
+});
+
 test("repository docs advertise the shipped korean-spell-check helper assets", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
