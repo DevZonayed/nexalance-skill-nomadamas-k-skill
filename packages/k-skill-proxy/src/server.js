@@ -93,7 +93,7 @@ function buildRateLimiter(config) {
   const state = new Map();
 
   return function rateLimit(request, reply) {
-    const key = trimOrNull(request.headers["cf-connecting-ip"]) || request.ip || "unknown";
+    const key = request.ip || "unknown";
     const now = Date.now();
     const current = state.get(key);
 
@@ -1109,13 +1109,16 @@ function buildServer({ env = process.env, provider = null } = {}) {
 
     let items;
     try {
-      items = await searchStocks({
+      const result = await searchStocks({
         query: normalized.q,
         basDd: normalized.basDd,
         market: normalized.market,
         limit: normalized.limit,
-        apiKey: config.krxApiKey
+        apiKey: config.krxApiKey,
+        cache,
+        cacheTtlMs: config.cacheTtlMs
       });
+      items = result.items;
     } catch (error) {
       reply.code(error.statusCode && error.statusCode >= 400 ? error.statusCode : 502);
       return {

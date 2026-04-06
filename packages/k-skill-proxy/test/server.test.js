@@ -136,6 +136,196 @@ test("korean stock search endpoint stays public and caches normalized search que
   assert.equal(fetchCalls[0].headers.AUTH_KEY, "krx-key");
 });
 
+test("korean stock search rate limit does not trust spoofed cf-connecting-ip on direct requests", async (t) => {
+  const app = buildServer({
+    env: {
+      KSKILL_PROXY_RATE_LIMIT_MAX: "1"
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90&bas_dd=20260404",
+    headers: {
+      "cf-connecting-ip": "1.1.1.1"
+    }
+  });
+  const second = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90&bas_dd=20260404",
+    headers: {
+      "cf-connecting-ip": "2.2.2.2"
+    }
+  });
+
+  assert.equal(first.statusCode, 503);
+  assert.equal(first.json().error, "upstream_not_configured");
+  assert.equal(second.statusCode, 429);
+  assert.equal(second.json().error, "rate_limited");
+});
+
+test("korean stock search returns healthy market results when another market upstream fails", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    const text = String(url);
+    fetchCalls.push({ url: text, headers: options.headers });
+
+    if (text.includes("stk_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: [
+            {
+              ISU_CD: "KR7005930003",
+              ISU_SRT_CD: "005930",
+              ISU_NM: "삼성전자",
+              ISU_ABBRV: "삼성전자",
+              ISU_ENG_NM: "Samsung Electronics",
+              LIST_DD: "19750611",
+              MKT_TP_NM: "KOSPI",
+              SECUGRP_NM: "주권",
+              SECT_TP_NM: "대형주",
+              KIND_STKCERT_TP_NM: "보통주",
+              PARVAL: "100",
+              LIST_SHRS: "5969782550"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    if (text.includes("ksq_isu_base_info")) {
+      return new Response("boom", {
+        status: 500,
+        statusText: "Internal Server Error"
+      });
+    }
+
+    if (text.includes("knx_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: []
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    throw new Error(`unexpected URL: ${url}`);
+  };
+
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90&bas_dd=20260404"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().items.length, 1);
+  assert.equal(response.json().items[0].market, "KOSPI");
+  assert.equal(response.json().items[0].code, "005930");
+  assert.equal(response.json().items[0].name, "삼성전자");
+  assert.equal(fetchCalls.length, 3);
+  assert.ok(fetchCalls.every((entry) => entry.url.startsWith("https://data-dbg.krx.co.kr/")));
+});
+
+test("korean stock search reuses per-market base snapshots across different queries for the same date", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    const text = String(url);
+    fetchCalls.push({ url: text, headers: options.headers });
+
+    if (text.includes("stk_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: [
+            {
+              ISU_CD: "KR7005930003",
+              ISU_SRT_CD: "005930",
+              ISU_NM: "삼성전자",
+              ISU_ABBRV: "삼성전자",
+              ISU_ENG_NM: "Samsung Electronics",
+              LIST_DD: "19750611",
+              MKT_TP_NM: "KOSPI",
+              SECUGRP_NM: "주권",
+              SECT_TP_NM: "대형주",
+              KIND_STKCERT_TP_NM: "보통주",
+              PARVAL: "100",
+              LIST_SHRS: "5969782550"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    if (text.includes("ksq_isu_base_info") || text.includes("knx_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: []
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    throw new Error(`unexpected URL: ${url}`);
+  };
+
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key",
+      KSKILL_PROXY_CACHE_TTL_MS: "60000"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const byKoreanName = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90&bas_dd=20260404"
+  });
+  const byEnglishName = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=Samsung&bas_dd=20260404"
+  });
+
+  assert.equal(byKoreanName.statusCode, 200);
+  assert.equal(byEnglishName.statusCode, 200);
+  assert.equal(byKoreanName.json().items[0].code, "005930");
+  assert.equal(byEnglishName.json().items[0].code, "005930");
+  assert.equal(fetchCalls.length, 3);
+});
+
 test("korean stock base-info endpoint returns 503 when proxy server lacks KRX API key", async (t) => {
   const app = buildServer();
 

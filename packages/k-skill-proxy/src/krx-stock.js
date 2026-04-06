@@ -217,22 +217,78 @@ function scoreSearchMatch(item, query) {
   return -1;
 }
 
-async function searchStocks({ query, basDd = getCurrentKstDate(), market = null, limit = 10, apiKey, fetchImpl = global.fetch }) {
+function buildBaseInfoSnapshotCacheKey({ market, basDd }) {
+  return `krx-base-info:${market}:${basDd}`;
+}
+
+async function fetchBaseInfoSnapshot({
+  market,
+  basDd,
+  apiKey,
+  fetchImpl = global.fetch,
+  cache = null,
+  cacheTtlMs = 0
+}) {
+  const cacheKey = cache ? buildBaseInfoSnapshotCacheKey({ market, basDd }) : null;
+  if (cacheKey) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const items = await fetchBaseInfo({ market, basDd, apiKey, fetchImpl });
+
+  if (cacheKey) {
+    cache.set(cacheKey, items, cacheTtlMs);
+  }
+
+  return items;
+}
+
+async function searchStocks({
+  query,
+  basDd = getCurrentKstDate(),
+  market = null,
+  limit = 10,
+  apiKey,
+  fetchImpl = global.fetch,
+  cache = null,
+  cacheTtlMs = 0
+}) {
   const markets = market ? [market] : KRX_MARKETS;
-  const results = await Promise.all(markets.map(async (entryMarket) => ({
+  const settledResults = await Promise.allSettled(markets.map(async (entryMarket) => ({
     market: entryMarket,
-    items: await fetchBaseInfo({ market: entryMarket, basDd, apiKey, fetchImpl })
+    items: await fetchBaseInfoSnapshot({
+      market: entryMarket,
+      basDd,
+      apiKey,
+      fetchImpl,
+      cache,
+      cacheTtlMs
+    })
   })));
 
-  return results
-    .flatMap(({ market: entryMarket, items }) =>
-      items
-        .map((item) => ({ ...item, market: item.market || entryMarket, score: scoreSearchMatch(item, query) }))
-        .filter((item) => item.score >= 0)
-    )
-    .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name, "ko"))
-    .slice(0, limit)
-    .map(({ score, ...item }) => item);
+  const successfulResults = settledResults
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+
+  if (successfulResults.length === 0) {
+    const firstFailure = settledResults.find((result) => result.status === "rejected");
+    throw firstFailure?.reason || new Error("KRX search failed for every market.");
+  }
+
+  return {
+    items: successfulResults
+      .flatMap(({ market: entryMarket, items }) =>
+        items
+          .map((item) => ({ ...item, market: item.market || entryMarket, score: scoreSearchMatch(item, query) }))
+          .filter((item) => item.score >= 0)
+      )
+      .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name, "ko"))
+      .slice(0, limit)
+      .map(({ score, ...item }) => item)
+  };
 }
 
 module.exports = {
