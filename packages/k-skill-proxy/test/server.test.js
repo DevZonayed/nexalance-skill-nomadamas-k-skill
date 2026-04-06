@@ -29,7 +29,248 @@ test("health endpoint stays public and reports auth/upstream status", async (t) 
   assert.equal(body.ok, true);
   assert.equal(body.auth.tokenRequired, false);
   assert.equal(body.upstreams.airKoreaConfigured, false);
+  assert.equal(body.upstreams.krxConfigured, false);
   assert.equal(body.upstreams.seoulOpenApiConfigured, false);
+});
+
+test("health endpoint reports KRX upstream status when configured", async (t) => {
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key"
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/health"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().upstreams.krxConfigured, true);
+});
+
+test("korean stock search endpoint stays public and caches normalized search queries", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    const text = String(url);
+    fetchCalls.push({ url: text, headers: options.headers });
+
+    if (text.includes("stk_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: [
+            {
+              ISU_CD: "KR7005930003",
+              ISU_SRT_CD: "005930",
+              ISU_NM: "삼성전자",
+              ISU_ABBRV: "삼성전자",
+              ISU_ENG_NM: "Samsung Electronics",
+              LIST_DD: "19750611",
+              MKT_TP_NM: "KOSPI",
+              SECUGRP_NM: "주권",
+              SECT_TP_NM: "대형주",
+              KIND_STKCERT_TP_NM: "보통주",
+              PARVAL: "100",
+              LIST_SHRS: "5969782550"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    if (text.includes("ksq_isu_base_info") || text.includes("knx_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: []
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    throw new Error(`unexpected URL: ${url}`);
+  };
+
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key",
+      KSKILL_PROXY_CACHE_TTL_MS: "60000"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%20%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90%20&bas_dd=20260404"
+  });
+  const second = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?query=%20%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90%20&date=20260404&limit=10"
+  });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(fetchCalls.length, 3);
+  assert.equal(first.json().proxy.cache.hit, false);
+  assert.equal(second.json().proxy.cache.hit, true);
+  assert.equal(first.json().items[0].market, "KOSPI");
+  assert.equal(first.json().items[0].code, "005930");
+  assert.equal(first.json().items[0].name, "삼성전자");
+  assert.match(fetchCalls[0].url, /basDd=20260404/);
+  assert.equal(fetchCalls[0].headers.AUTH_KEY, "krx-key");
+});
+
+test("korean stock base-info endpoint returns 503 when proxy server lacks KRX API key", async (t) => {
+  const app = buildServer();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/base-info?market=KOSPI&code=005930&bas_dd=20260404"
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error, "upstream_not_configured");
+});
+
+test("korean stock base-info endpoint normalizes upstream KRX fields", async (t) => {
+  const originalFetch = global.fetch;
+  let calledUrl;
+  let calledHeaders;
+  global.fetch = async (url, options = {}) => {
+    calledUrl = String(url);
+    calledHeaders = options.headers;
+    return new Response(
+      JSON.stringify({
+        OutBlock_1: [
+          {
+            ISU_CD: "KR7005930003",
+            ISU_SRT_CD: "005930",
+            ISU_NM: "삼성전자",
+            ISU_ABBRV: "삼성전자",
+            ISU_ENG_NM: "Samsung Electronics",
+            LIST_DD: "19750611",
+            MKT_TP_NM: "KOSPI",
+            SECUGRP_NM: "주권",
+            SECT_TP_NM: "대형주",
+            KIND_STKCERT_TP_NM: "보통주",
+            PARVAL: "100",
+            LIST_SHRS: "5969782550"
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      }
+    );
+  };
+
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/base-info?market=KOSPI&code=005930&bas_dd=20260404"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(calledUrl, /stk_isu_base_info/);
+  assert.match(calledUrl, /basDd=20260404/);
+  assert.equal(calledHeaders.AUTH_KEY, "krx-key");
+  assert.equal(response.json().item.code, "005930");
+  assert.equal(response.json().item.name, "삼성전자");
+  assert.equal(response.json().item.listed_shares, 5969782550);
+});
+
+test("korean stock trade-info endpoint caches successful responses", async (t) => {
+  const originalFetch = global.fetch;
+  let fetchCalls = 0;
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response(
+      JSON.stringify({
+        OutBlock_1: [
+          {
+            BAS_DD: "20260404",
+            ISU_CD: "KR7005930003",
+            ISU_NM: "삼성전자",
+            MKT_NM: "KOSPI",
+            SECT_TP_NM: "대형주",
+            TDD_CLSPRC: "84000",
+            CMPPREVDD_PRC: "1000",
+            FLUC_RT: "1.20",
+            TDD_OPNPRC: "83000",
+            TDD_HGPRC: "84500",
+            TDD_LWPRC: "82800",
+            ACC_TRDVOL: "12345678",
+            ACC_TRDVAL: "1030000000000",
+            MKTCAP: "500000000000000",
+            LIST_SHRS: "5969782550"
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      }
+    );
+  };
+
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key",
+      KSKILL_PROXY_CACHE_TTL_MS: "60000"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/trade-info?market=KOSPI&code=005930&bas_dd=20260404"
+  });
+  const second = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/trade-info?market=KOSPI&stockCode=005930&date=20260404"
+  });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(fetchCalls, 1);
+  assert.equal(first.json().proxy.cache.hit, false);
+  assert.equal(second.json().proxy.cache.hit, true);
+  assert.equal(first.json().item.close_price, 84000);
+  assert.equal(first.json().item.trading_value, 1030000000000);
 });
 
 test("fine dust endpoint stays publicly callable without proxy auth", async (t) => {
@@ -602,6 +843,48 @@ const SAMPLE_APT_TRADE_XML = `<?xml version="1.0" encoding="UTF-8"?>
     <totalCount>1</totalCount>
   </body>
 </response>`;
+
+const SAMPLE_KRX_BASE_INFO = {
+  OutBlock_1: [
+    {
+      ISU_CD: "KR7005930003",
+      ISU_SRT_CD: "005930",
+      ISU_NM: "삼성전자",
+      ISU_ABBRV: "삼성전자",
+      ISU_ENG_NM: "Samsung Electronics",
+      LIST_DD: "19750611",
+      MKT_TP_NM: "KOSPI",
+      SECUGRP_NM: "주권",
+      SECT_TP_NM: "전기전자",
+      KIND_STKCERT_TP_NM: "보통주",
+      PARVAL: "100",
+      LIST_SHRS: "5,919,638,922"
+    }
+  ]
+};
+
+const SAMPLE_KRX_TRADE_INFO = {
+  OutBlock_1: [
+    {
+      BAS_DD: "20260404",
+      ISU_CD: "KR7005930003",
+      ISU_SRT_CD: "005930",
+      ISU_NM: "삼성전자",
+      MKT_NM: "KOSPI",
+      SECT_TP_NM: "전기전자",
+      TDD_CLSPRC: "85,000",
+      CMPPREVDD_PRC: "1,200",
+      FLUC_RT: "1.43",
+      TDD_OPNPRC: "84,100",
+      TDD_HGPRC: "85,400",
+      TDD_LWPRC: "83,900",
+      ACC_TRDVOL: "12,345,678",
+      ACC_TRDVAL: "1,045,678,900,000",
+      MKTCAP: "503,169,308,370,000",
+      LIST_SHRS: "5,919,638,922"
+    }
+  ]
+};
 
 test("real estate region-code endpoint returns matching codes", async (t) => {
   const app = buildServer();
