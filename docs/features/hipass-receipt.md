@@ -21,6 +21,8 @@
 npm install hipass-receipt
 ```
 
+배포 패키지에는 CDP 연결용 `playwright-core` 가 함께 들어 있다. 별도 Playwright 브라우저를 내려받지 않고, 사용자가 직접 연 Chrome/Chromium 세션에 붙는다.
+
 이 레포를 clone 한 유지보수자라면 루트에서 `npm install` 로 workspace 패키지까지 함께 설치해도 된다.
 
 ## 로그인 브라우저 준비
@@ -40,7 +42,8 @@ hipass-receipt list \
   --cdp-url http://127.0.0.1:9222 \
   --start-date 2026-04-01 \
   --end-date 2026-04-07 \
-  --page-size 30
+  --page-size 30 \
+  --encrypted-card-number BASE64_OR_SITE_VALUE
 ```
 
 내부적으로 다음 흐름을 사용한다.
@@ -49,6 +52,8 @@ hipass-receipt list \
 2. `hpForm` 에 검색조건 주입
 3. `/usepculr/UsePculrTabSearchList.do` 로 submit
 4. iframe HTML 파싱 후 정규화 JSON 반환
+
+`--encrypted-card-number` 는 기존 `--ecd-no` 별칭과 같다.
 
 ## 영수증 팝업 열기
 

@@ -20,8 +20,8 @@ Commands:
   hipass-receipt --help
   hipass-receipt chrome-command [--profile-dir DIR] [--debugging-port PORT] [--chrome-path PATH]
   hipass-receipt fixture-demo --fixture PATH [--start-date YYYY-MM-DD --end-date YYYY-MM-DD]
-  hipass-receipt list --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--cdp-url URL] [--page-size N] [--ecd-no VALUE]
-  hipass-receipt receipt --start-date YYYY-MM-DD --end-date YYYY-MM-DD --row-index N [--cdp-url URL] [--ecd-no VALUE]
+  hipass-receipt list --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--cdp-url URL] [--page-size N] [--ecd-no VALUE|--encrypted-card-number VALUE]
+  hipass-receipt receipt --start-date YYYY-MM-DD --end-date YYYY-MM-DD --row-index N [--cdp-url URL] [--ecd-no VALUE|--encrypted-card-number VALUE]
 
 Notes:
 - This workflow only supports a logged-in browser session. It does not automate ID/PW or OTP entry.
@@ -62,6 +62,7 @@ async function main() {
 
   const command = argv[0]
   const args = parseArgs(argv.slice(1))
+  const ecdNo = args.ecdNo ?? args.encryptedCardNumber
 
   if (command === "chrome-command") {
     process.stdout.write(
@@ -92,7 +93,7 @@ async function main() {
       cdpUrl: args.cdpUrl,
       startDate: required(args, "startDate", "start-date YYYY-MM-DD"),
       endDate: required(args, "endDate", "end-date YYYY-MM-DD"),
-      ecdNo: args.ecdNo,
+      ecdNo,
       pageSize: args.pageSize,
       pageNo: args.pageNo,
       receiptTimeType: args.receiptTimeType
@@ -107,7 +108,7 @@ async function main() {
       startDate: required(args, "startDate", "start-date YYYY-MM-DD"),
       endDate: required(args, "endDate", "end-date YYYY-MM-DD"),
       rowIndex: Number(required(args, "rowIndex", "row-index N")),
-      ecdNo: args.ecdNo,
+      ecdNo,
       pageSize: args.pageSize,
       pageNo: args.pageNo,
       receiptTimeType: args.receiptTimeType

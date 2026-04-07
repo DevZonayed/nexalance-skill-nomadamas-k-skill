@@ -46,7 +46,7 @@ metadata:
 ## Prerequisites
 
 - macOS 또는 Chrome 실행 가능한 환경
-- `npm install hipass-receipt` 또는 이 레포에서 `npm install`
+- `npm install hipass-receipt` 또는 이 레포에서 `npm install` (`playwright-core` 포함)
 - Chrome 원격 디버깅 포트 사용 가능
 - 사용자가 직접 하이패스 로그인 가능
 
@@ -71,6 +71,7 @@ hipass-receipt list \
 ```
 
 - 카드사/암호화 카드번호를 알고 있으면 `--encrypted-card-number` 등으로 더 좁힐 수 있다.
+- `--encrypted-card-number` 는 CLI의 기존 `--ecd-no` 별칭이다.
 - 결과 JSON에서 `rowIndex` 를 확인한다.
 
 ### 3. 특정 row의 영수증 팝업을 연다

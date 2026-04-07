@@ -104,8 +104,8 @@ function buildUsageHistoryQuery(options = {}) {
 
   return {
     card_kind: toStringOrDefault(options.cardKind, "all"),
-    card_com: toStringOrDefault(options.cardCom, "all"),
-    ecd_no: toStringOrDefault(options.ecdNo, "all"),
+    card_com: toStringOrDefault(options.cardCom ?? options.cardCompany, "all"),
+    ecd_no: toStringOrDefault(options.ecdNo ?? options.encryptedCardNumber, "all"),
     sDate: startDate,
     eDate: endDate,
     date_type: toStringOrDefault(options.dateType, "work"),

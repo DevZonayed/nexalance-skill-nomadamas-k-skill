@@ -9,6 +9,7 @@
   },
   "files": [
     "src",
+    "test/fixtures",
     "README.md"
   ],
   "engines": {
@@ -31,5 +32,8 @@
   "scripts": {
     "lint": "node --check src/index.js && node --check src/parse.js && node --check src/browser.js && node --check src/cli.js && node --check test/index.test.js",
     "test": "node --test"
+  },
+  "dependencies": {
+    "playwright-core": "^1.52.0"
   }
 }

@@ -74,7 +74,7 @@ async function getAutomationPage(browser) {
 }
 
 async function gotoUsageHistoryPage(page) {
-  await page.goto(HIPASS_ENDPOINTS.initUsageHistory, { waitUntil: "domcontentloaded" })
+  await page.goto(HIPASS_ENDPOINTS.usageHistoryInit, { waitUntil: "domcontentloaded" })
   const info = inspectHipassPage(await page.content())
 
   if (info.reloginRequired) {

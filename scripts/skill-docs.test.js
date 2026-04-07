@@ -1286,9 +1286,12 @@ test("hipass-receipt skill documents the logged-in browser session contract", ()
   assert.match(featureDoc, /20분/);
   assert.match(featureDoc, /영수증선택출력|영수증전체출력/);
   assert.match(featureDoc, /로그인된 브라우저 세션에서만 동작/);
+  assert.match(featureDoc, /playwright-core/);
+  assert.match(skill, /--encrypted-card-number/);
   assert.match(packageReadme, /buildUsageHistoryQuery/);
   assert.match(packageReadme, /parseUsageHistoryList/);
   assert.match(packageReadme, /inspectHipassPage/);
+  assert.match(packageReadme, /playwright-core/);
 });
 
 test("toss-securities package exposes safe read-only tossctl helpers", () => {
@@ -1330,9 +1333,27 @@ test("hipass-receipt package README and npm metadata stay aligned with the helpe
 
   assert.equal(packageJson.name, "hipass-receipt");
   assert.match(packageJson.description, /Hi-Pass/);
+  assert.ok(packageJson.files.includes("test/fixtures"));
   assert.match(packageReadme, /logged-in browser session/i);
   assert.match(packageReadme, /Playwright/);
+  assert.equal(typeof packageJson.dependencies?.["playwright-core"], "string");
+  assert.match(packageReadme, /playwright-core/);
   assert.match(packageReadme, /buildReceiptRequest/);
+  assert.match(packageReadme, /test\/fixtures\/usage-history-list\.html/);
+});
+
+test("hipass-receipt pack dry-run ships fixture-demo assets for the published README workflow", () => {
+  const packResult = JSON.parse(
+    childProcess.execFileSync("npm", ["pack", "--workspace", "hipass-receipt", "--json", "--dry-run"], {
+      cwd: repoRoot,
+      encoding: "utf8"
+    }),
+  );
+
+  const files = packResult[0]?.files?.map((entry) => entry.path) || [];
+  assert.ok(files.includes("test/fixtures/usage-history-list.html"));
+  assert.ok(files.includes("test/fixtures/login-page.html"));
+  assert.ok(files.includes("README.md"));
 });
 
 test("pack:dry-run includes the toss-securities workspace", () => {

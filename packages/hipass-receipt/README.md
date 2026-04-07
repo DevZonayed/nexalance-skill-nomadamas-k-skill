@@ -15,6 +15,8 @@
 npm install hipass-receipt
 ```
 
+이 패키지는 CDP 연결용 `playwright-core` 를 함께 설치한다. 별도 Playwright 브라우저 번들을 받지 않고, 사용자가 직접 띄운 기존 Chrome/Chromium 프로필에 연결한다.
+
 ## Start Chrome with a dedicated profile
 
 ```bash
@@ -30,10 +32,13 @@ hipass-receipt list \
   --cdp-url http://127.0.0.1:9222 \
   --start-date 2026-04-01 \
   --end-date 2026-04-07 \
-  --page-size 30
+  --page-size 30 \
+  --encrypted-card-number BASE64_OR_SITE_VALUE
 ```
 
 내부적으로 `/usepculr/InitUsePculrTabSearch.do` → `hpForm` submit → `/usepculr/UsePculrTabSearchList.do` 흐름을 사용하고, iframe HTML을 정규화된 JSON으로 반환합니다.
+
+`--encrypted-card-number` 는 기존 `--ecd-no` 별칭과 동일하게 동작합니다.
 
 ## Open a receipt popup for one row
 
@@ -65,6 +70,8 @@ hipass-receipt receipt \
 ## Verification without credentials
 
 fixture 기반 smoke test 는 다음처럼 실행할 수 있습니다.
+
+repo workspace 또는 unpacked tarball/package 디렉터리 안에서는 아래 fixture smoke 를 바로 실행할 수 있습니다.
 
 ```bash
 node src/cli.js fixture-demo --fixture test/fixtures/usage-history-list.html

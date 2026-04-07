@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const {
@@ -46,6 +48,22 @@ test("buildUsageHistoryQuery normalizes defaults for logged-in usage-history sea
     h: "436",
     inc_vat: "nodisplay"
   });
+});
+
+test("buildUsageHistoryQuery accepts the encryptedCardNumber alias and the CLI help documents it", () => {
+  const query = buildUsageHistoryQuery({
+    startDate: "2026-04-01",
+    endDate: "2026-04-07",
+    encryptedCardNumber: "alias-card-token"
+  });
+
+  assert.equal(query.ecd_no, "alias-card-token");
+
+  const help = childProcess.execFileSync(process.execPath, [path.join(__dirname, "..", "src", "cli.js"), "--help"], {
+    encoding: "utf8"
+  });
+
+  assert.match(help, /--encrypted-card-number VALUE/);
 });
 
 test("buildUsageHistoryQuery rejects invalid date windows and unsupported paging options", () => {
@@ -152,4 +170,102 @@ test("inspectHipassPage flags login and permission-check pages as re-login-requi
 
   assert.equal(listPage.pageType, "usage-history-list");
   assert.equal(listPage.reloginRequired, false);
+});
+
+test("list command accepts --encrypted-card-number and reaches the usage-history init endpoint with a mocked CDP browser", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hipass-receipt-playwright-"));
+  const mockHookPath = path.join(tempDir, "mock-playwright.js");
+
+  const fakeModuleSource = `
+const Module = require("node:module");
+const fixtureHtml = ${JSON.stringify(usageHistoryHtml)};
+let submittedQuery = null;
+
+const frame = {
+  name() {
+    return "if_main_post";
+  },
+  url() {
+    return "https://www.hipass.co.kr/usepculr/UsePculrTabSearchList.do";
+  },
+  async waitForLoadState() {},
+  async content() {
+    return fixtureHtml.replace(
+      'value="QmFzZTY0RW5jcnlwdGVkQ2FyZE5vPT0="',
+      'value="' + (submittedQuery?.ecd_no || "") + '"',
+    );
+  }
+};
+
+const page = {
+  async goto(url) {
+    if (!url) {
+      throw new Error("goto received undefined");
+    }
+  },
+  async content() {
+    return "<html><body>사용내역 조회</body></html>";
+  },
+  async evaluate(_callback, query) {
+    submittedQuery = query;
+  },
+  frames() {
+    return [frame];
+  },
+  async waitForTimeout() {}
+};
+
+const fakePlaywright = {
+  chromium: {
+    async connectOverCDP() {
+      return {
+        contexts() {
+          return [{
+            pages() {
+              return [page];
+            }
+          }];
+        }
+      };
+    }
+  }
+};
+
+const originalLoad = Module._load;
+Module._load = function patchedLoad(request, parent, isMain) {
+  if (request === "playwright-core" || request === "playwright") {
+    return fakePlaywright;
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+`;
+
+  fs.writeFileSync(mockHookPath, fakeModuleSource);
+
+  const output = childProcess.execFileSync(
+    process.execPath,
+    [
+      path.join(__dirname, "..", "src", "cli.js"),
+      "list",
+      "--start-date",
+      "2026-04-01",
+      "--end-date",
+      "2026-04-07",
+      "--encrypted-card-number",
+      "ENC-ONLY-ALIAS"
+    ],
+    {
+      cwd: path.join(__dirname, ".."),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ""}--require ${mockHookPath}`
+      }
+    },
+  );
+
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.rows.length, 2);
+  assert.equal(parsed.query.sDate, "20260401");
+  assert.equal(parsed.query.ecd_no, "ENC-ONLY-ALIAS");
 });
