@@ -1031,8 +1031,9 @@ test("repository docs advertise the blue-ribbon-nearby skill across the document
   const featureDocPath = path.join(repoRoot, "docs", "features", "blue-ribbon-nearby.md");
 
   assert.ok(fs.existsSync(featureDocPath), "expected docs/features/blue-ribbon-nearby.md to exist");
-  assert.match(readme, /\| 근처 블루리본 맛집 \|/);
+  assert.match(readme, /\| ~~근처 블루리본 맛집~~ ⚠️ 지원 중단 \|/);
   assert.match(readme, /\[근처 블루리본 맛집 가이드\]\(docs\/features\/blue-ribbon-nearby\.md\)/);
+  assert.match(readme, /블루리본 측이 `www\.bluer\.co\.kr` 에 자동화 접근 전면 차단/);
   assert.match(install, /--skill blue-ribbon-nearby/);
   assert.match(roadmap, /근처 블루리본 맛집 스킬 출시/);
   assert.match(sources, /블루리본 지역 검색: https:\/\/www\.bluer\.co\.kr\/search\/zone/);
