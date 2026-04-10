@@ -1042,6 +1042,37 @@ test("household waste info endpoint requires SGG_NM filter", async (t) => {
   assert.equal(response.json().error, "bad_request");
 });
 
+test("household waste info endpoint rejects duplicated SGG_NM filters before upstream fetch", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    fetchCalls.push(String(url));
+    return new Response(JSON.stringify({ response: { body: { items: [] } } }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  const app = buildServer({
+    env: { DATA_GO_KR_API_KEY: "test-key" }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/household-waste/info?cond%5BSGG_NM%3A%3ALIKE%5D=%EA%B0%95%EB%82%A8%EA%B5%AC&cond%5BSGG_NM%3A%3ALIKE%5D=%EC%84%9C%EC%B4%88%EA%B5%AC&pageNo=1&numOfRows=20"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "bad_request");
+  assert.match(response.json().message, /cond\[SGG_NM::LIKE\]/i);
+  assert.equal(fetchCalls.length, 0);
+});
+
 test("household waste info endpoint reports 503 when DATA_GO_KR_API_KEY is missing", async (t) => {
   const app = buildServer();
 

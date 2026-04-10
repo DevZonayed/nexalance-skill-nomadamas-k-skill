@@ -43,6 +43,13 @@ function trimOrNull(value) {
   return trimmed;
 }
 
+function trimSingleQueryValueOrNull(value, fieldName) {
+  if (Array.isArray(value)) {
+    throw new Error(`${fieldName} must be provided exactly once.`);
+  }
+  return trimOrNull(value);
+}
+
 function buildConfig(env = process.env) {
   return {
     host: env.KSKILL_PROXY_HOST || "127.0.0.1",
@@ -332,12 +339,12 @@ function normalizeRegionCodeQuery(query) {
 }
 
 function normalizeHouseholdWasteInfoQuery(query) {
-  const sggNm = trimOrNull(query["cond[SGG_NM::LIKE]"]);
+  const sggNm = trimSingleQueryValueOrNull(query["cond[SGG_NM::LIKE]"], "cond[SGG_NM::LIKE]");
   if (!sggNm) {
     throw new Error("cond[SGG_NM::LIKE] is required");
   }
 
-  const pageNoRaw = trimOrNull(query.pageNo ?? query.page_no) || "1";
+  const pageNoRaw = trimSingleQueryValueOrNull(query.pageNo ?? query.page_no, "pageNo") || "1";
   if (!/^\d+$/.test(pageNoRaw)) {
     throw new Error("pageNo must be an integer >= 1.");
   }
@@ -346,7 +353,7 @@ function normalizeHouseholdWasteInfoQuery(query) {
     throw new Error("pageNo must be an integer >= 1.");
   }
 
-  const numOfRowsRaw = trimOrNull(query.numOfRows ?? query.num_of_rows) || "20";
+  const numOfRowsRaw = trimSingleQueryValueOrNull(query.numOfRows ?? query.num_of_rows, "numOfRows") || "20";
   if (!/^\d+$/.test(numOfRowsRaw)) {
     throw new Error("numOfRows must be an integer between 1 and 100.");
   }
