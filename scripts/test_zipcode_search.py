@@ -1,4 +1,6 @@
 import json
+import os
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -81,6 +83,19 @@ class ZipcodeSearchCliShapeTest(unittest.TestCase):
         self.assertEqual(payload["query"], "서울특별시 강남구 테헤란로 123")
         self.assertEqual(payload["results"][0]["zip_code"], "06133")
         self.assertIn("Teheran-ro", payload["results"][0]["english_address"])
+
+    def test_helper_scripts_are_executable_python_entrypoints(self):
+        repo_root = Path(__file__).resolve().parent.parent
+        for helper in (
+            repo_root / "scripts" / "zipcode_search.py",
+            repo_root / "zipcode-search" / "scripts" / "zipcode_search.py",
+        ):
+            with self.subTest(helper=helper):
+                self.assertTrue(os.access(helper, os.X_OK), f"{helper} should be executable")
+                self.assertTrue(
+                    helper.read_text(encoding="utf-8").startswith("#!/usr/bin/env python3\n"),
+                    f"{helper} should start with a Python shebang",
+                )
 
 
 if __name__ == "__main__":
