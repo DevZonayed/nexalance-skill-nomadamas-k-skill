@@ -1182,6 +1182,37 @@ test("household waste info endpoint rejects non-numeric pageNo before upstream f
   assert.equal(fetchCalls.length, 0);
 });
 
+test("household waste info endpoint rejects pageNo below 1 before upstream fetch", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    fetchCalls.push(String(url));
+    return new Response(JSON.stringify({ response: { body: { items: [] } } }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  const app = buildServer({
+    env: { DATA_GO_KR_API_KEY: "test-key" }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/household-waste/info?cond%5BSGG_NM%3A%3ALIKE%5D=%EA%B0%95%EB%82%A8%EA%B5%AC&pageNo=0&numOfRows=20"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "bad_request");
+  assert.match(response.json().message, /pageNo/i);
+  assert.equal(fetchCalls.length, 0);
+});
+
 test("household waste info endpoint rejects numOfRows above 100 before upstream fetch", async (t) => {
   const originalFetch = global.fetch;
   const fetchCalls = [];
@@ -1205,6 +1236,37 @@ test("household waste info endpoint rejects numOfRows above 100 before upstream 
   const response = await app.inject({
     method: "GET",
     url: "/v1/household-waste/info?cond%5BSGG_NM%3A%3ALIKE%5D=%EA%B0%95%EB%82%A8%EA%B5%AC&pageNo=1&numOfRows=101"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "bad_request");
+  assert.match(response.json().message, /numOfRows/i);
+  assert.equal(fetchCalls.length, 0);
+});
+
+test("household waste info endpoint rejects numOfRows below 1 before upstream fetch", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    fetchCalls.push(String(url));
+    return new Response(JSON.stringify({ response: { body: { items: [] } } }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  const app = buildServer({
+    env: { DATA_GO_KR_API_KEY: "test-key" }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/household-waste/info?cond%5BSGG_NM%3A%3ALIKE%5D=%EA%B0%95%EB%82%A8%EA%B5%AC&pageNo=1&numOfRows=0"
   });
 
   assert.equal(response.statusCode, 400);

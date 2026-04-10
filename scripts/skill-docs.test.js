@@ -255,6 +255,20 @@ test("setup guide lists hosted proxy skill coverage including household waste an
   assert.match(setup, /\[학교 급식 식단 조회 가이드\]\(features\/k-schoollunch-menu\.md\)/);
 });
 
+test("security and install docs keep school lunch on the hosted proxy / no-user-key path", () => {
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const install = read(path.join("docs", "install.md"));
+
+  assert.match(
+    security,
+    /미세먼지, 한강 수위, 주유소 가격, 생활쓰레기 배출정보, 학교 급식 식단은 이 값이 없으면 기본 hosted path\(`k-skill-proxy\.nomadamas\.org`\)를 사용한다\./,
+  );
+  assert.match(
+    install,
+    /`k-schoollunch-menu` 는 별도 설치 없이 `k-skill-proxy`의 `\/v1\/neis\/school-search`, `\/v1\/neis\/school-meal` 라우트를 호출하고, `KEDU_INFO_KEY`는 proxy 서버에서만 나이스 Open API `KEY`로 주입한다\. 사용자 쪽 `KEDU_INFO_KEY` 가 불필요하다\./,
+  );
+});
+
 test("repository docs advertise the used-car-price-search skill", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));

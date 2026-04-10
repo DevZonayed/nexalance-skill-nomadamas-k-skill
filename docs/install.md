@@ -103,6 +103,8 @@ korean-law list
 
 `household-waste-info` 는 별도 설치 없이 `k-skill-proxy`의 `/v1/household-waste/info` 라우트를 호출하고, `serviceKey`(`DATA_GO_KR_API_KEY`)는 proxy 서버에서만 원본 API(`apis.data.go.kr/1741000/household_waste_info/info`)로 주입한다. 사용자 쪽 `DATA_GO_KR_API_KEY` 가 불필요하다. 자세한 사용법은 [생활쓰레기 배출정보 조회 가이드](features/household-waste-info.md)를 본다.
 
+`k-schoollunch-menu` 는 별도 설치 없이 `k-skill-proxy`의 `/v1/neis/school-search`, `/v1/neis/school-meal` 라우트를 호출하고, `KEDU_INFO_KEY`는 proxy 서버에서만 나이스 Open API `KEY`로 주입한다. 사용자 쪽 `KEDU_INFO_KEY` 가 불필요하다. 자세한 사용법은 [학교 급식 식단 조회 가이드](features/k-schoollunch-menu.md)를 본다.
+
 ### `olive-young-search` upstream CLI quickstart
 
 `olive-young-search` 는 upstream 원본 [`hmmhmmhm/daiso-mcp`](https://github.com/hmmhmmhm/daiso-mcp) / npm package [`daiso`](https://www.npmjs.com/package/daiso) 를 그대로 사용한다.
