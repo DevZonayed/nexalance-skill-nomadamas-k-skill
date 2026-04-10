@@ -221,7 +221,7 @@ test("repository docs advertise the used-car-price-search skill", () => {
   assert.match(install, /--skill used-car-price-search/);
   assert.match(
     install,
-    /npm install -g @ohah\/hwpjs kbo-game kleague-results lck-analytics toss-securities k-lotto coupang-product-search used-car-price-search cheap-gas-nearby korean-law-mcp/,
+    /npm install -g @ohah\/hwpjs kbo-game kleague-results lck-analytics toss-securities hipass-receipt k-lotto coupang-product-search used-car-price-search cheap-gas-nearby korean-law-mcp/,
   );
 });
 
@@ -282,7 +282,43 @@ test("repository docs advertise the korean-spell-check skill and usage constrain
   assert.match(roadmap, /한국어 맞춤법 검사 스킬 출시/);
 });
 
+test("repository docs advertise the MFDS public-health skills and mandatory symptom interview", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const drugSkillPath = path.join(repoRoot, "mfds-drug-safety", "SKILL.md");
+  const foodSkillPath = path.join(repoRoot, "mfds-food-safety", "SKILL.md");
+  const drugFeaturePath = path.join(repoRoot, "docs", "features", "mfds-drug-safety.md");
+  const foodFeaturePath = path.join(repoRoot, "docs", "features", "mfds-food-safety.md");
 
+  assert.ok(fs.existsSync(drugSkillPath), "expected mfds-drug-safety/SKILL.md to exist");
+  assert.ok(fs.existsSync(foodSkillPath), "expected mfds-food-safety/SKILL.md to exist");
+  assert.ok(fs.existsSync(drugFeaturePath), "expected docs/features/mfds-drug-safety.md to exist");
+  assert.ok(fs.existsSync(foodFeaturePath), "expected docs/features/mfds-food-safety.md to exist");
+  assert.match(readme, /\| 의약품 안전 체크 \|/);
+  assert.match(readme, /\| 식품 안전 체크 \|/);
+  assert.match(install, /--skill mfds-drug-safety/);
+  assert.match(install, /--skill mfds-food-safety/);
+  assert.match(sources, /15075057\/openapi\.do/);
+  assert.match(sources, /15097208\/openapi\.do/);
+  assert.match(sources, /15056516\/openapi\.do/);
+  assert.match(sources, /15074318\/openapi\.do/);
+  assert.match(sources, /foodsafetykorea\.go\.kr\/api\/openApiInfo\.do.*svc_no=I0490/);
+
+  for (const relativePath of [
+    path.join("mfds-drug-safety", "SKILL.md"),
+    path.join("mfds-food-safety", "SKILL.md"),
+    path.join("docs", "features", "mfds-drug-safety.md"),
+    path.join("docs", "features", "mfds-food-safety.md")
+  ]) {
+    const doc = read(relativePath);
+
+    assert.match(doc, /인터뷰|되묻/);
+    assert.match(doc, /호흡곤란/);
+    assert.match(doc, /직접 진단|진단\/처방|진단\)이나/);
+    assert.match(doc, /119|응급실/);
+  }
+});
 test("used-car-price-search docs document the provider survey and SK direct surface", () => {
   const skill = read(path.join("used-car-price-search", "SKILL.md"));
   const featureDoc = read(path.join("docs", "features", "used-car-price-search.md"));
@@ -348,6 +384,50 @@ test("seoul subway docs require an explicit proxy until the hosted route is live
   assert.doesNotMatch(secretsExample, /SEOUL_OPEN_API_KEY/);
   assert.match(secretsExample, /KSKILL_PROXY_BASE_URL=https:\/\/your-proxy\.example\.com/);
   assert.doesNotMatch(secretsExample, /KSKILL_PROXY_BASE_URL=https:\/\/k-skill-proxy\.nomadamas\.org/);
+});
+
+test("repository docs advertise the korea-weather skill across the documented surfaces", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "korea-weather.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/korea-weather.md to exist");
+  assert.match(readme, /\| 한국 날씨 조회 \|/);
+  assert.match(readme, /\[한국 날씨 조회 가이드\]\(docs\/features\/korea-weather\.md\)/);
+  assert.match(install, /--skill korea-weather/);
+  assert.match(roadmap, /한국 날씨 조회 스킬 출시/);
+  assert.match(sources, /기상청 단기예보 조회서비스: https:\/\/www\.data\.go\.kr\/data\/15084084\/openapi\.do/);
+});
+
+test("korea-weather docs route short-term forecast calls through the proxy without requiring a user API key", () => {
+  const skillPath = path.join(repoRoot, "korea-weather", "SKILL.md");
+
+  assert.ok(fs.existsSync(skillPath), "expected korea-weather/SKILL.md to exist");
+
+  const skill = read(path.join("korea-weather", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "korea-weather.md"));
+  const proxyDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
+  const proxyReadme = read(path.join("packages", "k-skill-proxy", "README.md"));
+
+  assert.match(skill, /^name: korea-weather$/m);
+  assert.match(skill, /^description: .*날씨.*기상청.*프록시.*$/m);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /\/v1\/korea-weather\/forecast/);
+    assert.match(doc, /기상청.*단기예보|단기예보.*기상청/);
+    assert.match(doc, /사용자가 .*API key.*직접.*필요(가|는)? 없다|개인 API key 없이/i);
+    assert.match(doc, /nx|ny|위도|경도/u);
+    assert.match(doc, /TMP|SKY|PTY|POP/);
+    assert.match(doc, /KSKILL_PROXY_BASE_URL|k-skill-proxy\.nomadamas\.org/);
+    assert.doesNotMatch(doc, /KMA_OPEN_API_KEY=.*사용자/);
+  }
+
+  assert.match(proxyDoc, /GET \/v1\/korea-weather\/forecast/);
+  assert.match(proxyDoc, /KMA_OPEN_API_KEY/);
+  assert.match(proxyReadme, /GET \/v1\/korea-weather\/forecast/);
+  assert.match(proxyReadme, /KMA_OPEN_API_KEY/);
 });
 
 test("kakaotalk-mac skill documents safe macOS kakaocli usage", () => {
@@ -433,6 +513,32 @@ test("ktx-booking helper python regression tests pass", () => {
   );
 });
 
+test("repository docs advertise the subway-lost-property skill across the documented surfaces", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "subway-lost-property.md");
+  const skillPath = path.join(repoRoot, "subway-lost-property", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/subway-lost-property.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected subway-lost-property/SKILL.md to exist");
+  assert.match(readme, /\| 지하철 분실물 조회 \|/);
+  assert.match(readme, /\[지하철 분실물 조회 가이드\]\(docs\/features\/subway-lost-property\.md\)/);
+  assert.match(install, /--skill subway-lost-property/);
+});
+
+test("subway-lost-property docs lock the official LOST112 guidance flow", () => {
+  const skill = read(path.join("subway-lost-property", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "subway-lost-property.md"));
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /LOST112/);
+    assert.match(doc, /seoulmetro\.co\.kr\/kr\/page\.do\?menuIdx=541/);
+    assert.match(doc, /python3 scripts\/subway_lost_property\.py/);
+    assert.match(doc, /SITE=V/);
+    assert.match(doc, /안내형|하이브리드/);
+  }
+});
+
 test("repository docs advertise the zipcode-search skill across the documented surfaces", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
@@ -448,40 +554,41 @@ test("repository docs advertise the zipcode-search skill across the documented s
   assert.match(sources, /우체국 도로명주소 검색: https:\/\/parcel\.epost\.go\.kr\/parcel\/comm\/zipcode\/comm_newzipcd_list\.jsp/);
 });
 
-test("zipcode-search docs lock the official ePost extraction flow and reliable transport example", () => {
+test("zipcode-search docs lock the official postcode plus English-address extraction flow", () => {
   const skillPath = path.join(repoRoot, "zipcode-search", "SKILL.md");
 
   assert.ok(fs.existsSync(skillPath), "expected zipcode-search/SKILL.md to exist");
 
   const skill = read(path.join("zipcode-search", "SKILL.md"));
   const featureDoc = read(path.join("docs", "features", "zipcode-search.md"));
+  const readme = read("README.md");
+  const sources = read(path.join("docs", "sources.md"));
 
   assert.match(skill, /^name: zipcode-search$/m);
 
   for (const doc of [skill, featureDoc]) {
-    assert.match(doc, /parcel\.epost\.go\.kr\/parcel\/comm\/zipcode\/comm_newzipcd_list\.jsp/);
-    assert.match(doc, /sch_zipcode/);
-    assert.match(doc, /sch_address1/);
-    assert.match(doc, /sch_bdNm/);
+    assert.match(doc, /https:\/\/www\.epost\.kr\/search\.RetrieveIntegrationNewZipCdList\.comm/);
+    assert.match(doc, /viewDetail/);
+    assert.match(doc, /English\/집배코드/);
+    assert.match(doc, /Rep\. of KOREA/);
     assert.match(doc, /curl --http1\.1 --tls-max 1\.2/);
     assert.match(doc, /--max-time/);
     assert.match(doc, /"--retry",\s+"3"/);
     assert.match(doc, /--retry-all-errors/);
     assert.match(doc, /"--retry-delay",\s+"1"/);
+    assert.match(doc, /영문 주소|영문주소/);
+    assert.match(doc, /python3 scripts\/zipcode_search\.py/);
+    assert.match(doc, /\.\/scripts\/zipcode_search\.py/);
     assert.match(doc, /mktemp|임시 파일/);
-    assert.match(doc, /curl: \(23\)/);
-    assert.match(doc, /짧은 도로명 \+ 건물번호/);
-    assert.match(doc, /시\/군\/구 포함 전체 주소/);
     assert.doesNotMatch(doc, /urllib\.request/);
-    assert.doesNotMatch(doc, /urlopen/);
   }
 
+  assert.match(readme, /우편번호 \+ 공식 영문주소 조회/);
+  assert.match(sources, /우체국 통합 우편번호\/영문주소 검색: https:\/\/www\.epost\.kr\/search\.RetrieveIntegrationNewZipCdList\.comm/);
   assert.match(skill, /검색 결과가 없으면/i);
   assert.doesNotMatch(skill, /timeout\s*=/);
   assert.doesNotMatch(featureDoc, /timeout\s*=/);
-  assert.match(skill, /`curl` 자체 제한/);
   assert.match(featureDoc, /프로토콜\/클라이언트 제약/i);
-  assert.match(featureDoc, /`curl` 자체 제한/);
 });
 
 test("repository docs advertise the delivery-tracking skill across the documented surfaces", () => {
@@ -749,6 +856,54 @@ test("daiso-product-search docs record the shipped feature and official sources"
   assert.match(sources, /https:\/\/www\.daisomall\.co\.kr\/api\/pd\/pdh\/selStrPkupStck/);
 });
 
+test("repository docs advertise the market-kurly-search skill across the documented surfaces", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "market-kurly-search.md");
+  const skillPath = path.join(repoRoot, "market-kurly-search", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/market-kurly-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected market-kurly-search/SKILL.md to exist");
+  assert.match(readme, /\| 마켓컬리 상품 조회 \|/);
+  assert.match(readme, /\[마켓컬리 상품 조회 가이드\]\(docs\/features\/market-kurly-search\.md\)/);
+  assert.match(install, /--skill market-kurly-search/);
+  assert.match(install, /npm install -g .* market-kurly-search/);
+  assert.match(roadmap, /마켓컬리 상품 조회 스킬 출시/);
+  assert.match(sources, /https:\/\/api\.kurly\.com\/search\/v4\/sites\/market\/normal-search/);
+  assert.match(sources, /https:\/\/api\.kurly\.com\/search\/v3\/sites\/market\/normal-search\/count/);
+  assert.match(sources, /https:\/\/www\.kurly\.com\/goods\/5063110/);
+});
+
+test("market-kurly-search skill and docs describe the unauthenticated Kurly search and detail flow", () => {
+  const skill = read(path.join("market-kurly-search", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "market-kurly-search.md"));
+
+  assert.match(skill, /^name: market-kurly-search$/m);
+  assert.match(skill, /^description: .*마켓컬리.*상품.*가격.*$/m);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /api\.kurly\.com\/search\/v4\/sites\/market\/normal-search/);
+    assert.match(doc, /api\.kurly\.com\/search\/v3\/sites\/market\/normal-search\/count/);
+    assert.match(doc, /www\.kurly\.com\/goods\/<productNo>|www\.kurly\.com\/goods\/5063110/);
+    assert.match(doc, /로그인 없이|비로그인/);
+    assert.match(doc, /현재 가격|할인/);
+    assert.match(doc, /품절 여부|판매 상태/);
+    assert.match(doc, /가격.*달라질 수|시점에 따라 달라질 수/u);
+    assert.match(doc, /주문|장바구니/);
+    assert.match(doc, /보수적으로|보수적/);
+  }
+});
+
+test("market-kurly-search package exposes reusable search/count/detail helpers", () => {
+  const pkg = require(path.join(repoRoot, "packages", "market-kurly-search", "src", "index.js"));
+
+  assert.equal(typeof pkg.searchProducts, "function");
+  assert.equal(typeof pkg.countProducts, "function");
+  assert.equal(typeof pkg.getProductDetail, "function");
+});
+
 test("repository docs advertise the olive-young-search skill across the documented surfaces", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
@@ -819,6 +974,70 @@ test("olive-young-search skill documents the upstream daiso CLI flow for stores,
   }
 });
 
+test("repository docs advertise the bunjang-search skill across the documented surfaces", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "bunjang-search.md");
+  const skillPath = path.join(repoRoot, "bunjang-search", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/bunjang-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected bunjang-search/SKILL.md to exist");
+  assert.match(readme, /\| 번개장터 검색 \|/);
+  assert.match(readme, /\[번개장터 검색 가이드\]\(docs\/features\/bunjang-search\.md\)/);
+  assert.match(install, /--skill bunjang-search/);
+  assert.match(install, /npm install -g .* bunjang-cli/);
+  assert.match(roadmap, /번개장터 검색 스킬 출시/);
+  assert.match(sources, /https:\/\/www\.npmjs\.com\/package\/bunjang-cli/);
+  assert.match(sources, /https:\/\/github\.com\/pinion05\/bunjangcli/);
+});
+
+test("bunjang-search skill documents bunjang-cli search, detail, favorite, chat, and AI export flows", () => {
+  const skill = read(path.join("bunjang-search", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "bunjang-search.md"));
+  const install = read(path.join("docs", "install.md"));
+
+  assert.match(skill, /^name: bunjang-search$/m);
+  assert.match(skill, /^description: .*번개장터.*검색.*상세.*찜.*채팅.*$/m);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /bunjang-cli/);
+    assert.match(doc, /pinion05\/bunjangcli/);
+    assert.match(doc, /npx --yes bunjang-cli --help/);
+    assert.match(doc, /npx --yes bunjang-cli search /);
+    assert.match(doc, /item get/);
+    assert.match(doc, /favorite add/);
+    assert.match(doc, /favorite remove/);
+    assert.match(doc, /favorite list/);
+    assert.match(doc, /chat list/);
+    assert.match(doc, /chat start/);
+    assert.match(doc, /chat send/);
+    assert.match(doc, /--start-page/);
+    assert.match(doc, /--pages/);
+    assert.match(doc, /--max-items/);
+    assert.match(doc, /--with-detail/);
+    assert.match(doc, /--output/);
+    assert.match(doc, /--ai/);
+    assert.match(doc, /TOON|toon/i);
+    assert.match(doc, /TTY|interactive/);
+    assert.match(doc, /로그인.*선택적|선택적.*로그인/u);
+    assert.match(
+      doc,
+      /검색 결과.*(제목.?가격|가격.?제목).*(1차|우선)|title.?price.*(triage|first)/i,
+    );
+    assert.match(
+      doc,
+      /(description|status|location).*(item get|--with-detail).*(전|먼저|이후)|((item get|--with-detail).*(description|status|location).*(전|먼저|이후))/i,
+    );
+    assert.match(doc, /노이즈|noisy|불안정|rely on/i);
+  }
+
+  assert.match(install, /### `bunjang-search` upstream CLI quickstart/);
+  assert.match(install, /npx --yes bunjang-cli --help/);
+  assert.match(install, /npx --yes bunjang-cli search "아이폰"/);
+  assert.match(install, /npx --yes bunjang-cli --json item get/);
+});
 
 test("repository docs advertise the coupang-product-search skill", () => {
   const readme = read("README.md");
@@ -852,6 +1071,7 @@ test("root pack:dry-run script covers all publishable workspaces", () => {
 
   assert.match(packageJson.scripts["pack:dry-run"], /workspace k-lotto/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace daiso-product-search/);
+  assert.match(packageJson.scripts["pack:dry-run"], /workspace market-kurly-search/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace blue-ribbon-nearby/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace kakao-bar-nearby/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace kleague-results/);
@@ -923,8 +1143,9 @@ test("repository docs advertise the blue-ribbon-nearby skill across the document
   const featureDocPath = path.join(repoRoot, "docs", "features", "blue-ribbon-nearby.md");
 
   assert.ok(fs.existsSync(featureDocPath), "expected docs/features/blue-ribbon-nearby.md to exist");
-  assert.match(readme, /\| 근처 블루리본 맛집 \|/);
+  assert.match(readme, /\| ~~근처 블루리본 맛집~~ ⚠️ 지원 중단 \|/);
   assert.match(readme, /\[근처 블루리본 맛집 가이드\]\(docs\/features\/blue-ribbon-nearby\.md\)/);
+  assert.match(readme, /블루리본 측이 `www\.bluer\.co\.kr` 에 자동화 접근 전면 차단/);
   assert.match(install, /--skill blue-ribbon-nearby/);
   assert.match(roadmap, /근처 블루리본 맛집 스킬 출시/);
   assert.match(sources, /블루리본 지역 검색: https:\/\/www\.bluer\.co\.kr\/search\/zone/);
@@ -1117,6 +1338,26 @@ test("repository docs advertise the toss-securities skill across the documented 
   assert.match(sources, /tossinvest-cli: https:\/\/github\.com\/JungHoonGhae\/tossinvest-cli/);
 });
 
+test("repository docs advertise the hipass-receipt skill across the documented surfaces", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const setup = read(path.join("docs", "setup.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "hipass-receipt.md");
+  const skillPath = path.join(repoRoot, "hipass-receipt", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/hipass-receipt.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected hipass-receipt/SKILL.md to exist");
+  assert.match(readme, /\| 하이패스 영수증 발급 \|/);
+  assert.match(readme, /\[하이패스 영수증 발급 가이드\]\(docs\/features\/hipass-receipt\.md\)/);
+  assert.match(install, /--skill hipass-receipt/);
+  assert.match(setup, /하이패스 영수증 발급 \| 사용자 시크릿 불필요 \(로그인된 브라우저 세션 필요\)/);
+  assert.match(roadmap, /하이패스 영수증 발급 스킬 출시/);
+  assert.match(sources, /https:\/\/www\.hipass\.co\.kr\/main\.do/);
+  assert.match(sources, /https:\/\/www\.hipass\.co\.kr\/html\/guide\/siteguide_6\.jsp/);
+});
+
 test("toss-securities skill documents the tossctl install, auth, and read-only workflow", () => {
   const skillPath = path.join(repoRoot, "toss-securities", "SKILL.md");
 
@@ -1140,6 +1381,32 @@ test("toss-securities skill documents the tossctl install, auth, and read-only w
   }
 });
 
+test("hipass-receipt skill documents the logged-in browser session contract", () => {
+  const skillPath = path.join(repoRoot, "hipass-receipt", "SKILL.md");
+  const packageReadmePath = path.join(repoRoot, "packages", "hipass-receipt", "README.md");
+
+  assert.ok(fs.existsSync(skillPath), "expected hipass-receipt/SKILL.md to exist");
+  assert.ok(fs.existsSync(packageReadmePath), "expected packages/hipass-receipt/README.md to exist");
+
+  const skill = read(path.join("hipass-receipt", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "hipass-receipt.md"));
+  const packageReadme = read(path.join("packages", "hipass-receipt", "README.md"));
+
+  assert.match(skill, /^name: hipass-receipt$/m);
+  assert.match(skill, /로그인은 반드시 사용자가 직접 해야 한다/);
+  assert.match(skill, /Playwright persistent context|user-data-dir/);
+  assert.match(skill, /세션이 만료되면 즉시 중단하고 다시 로그인/);
+  assert.match(featureDoc, /20분/);
+  assert.match(featureDoc, /영수증선택출력|영수증전체출력/);
+  assert.match(featureDoc, /로그인된 브라우저 세션에서만 동작/);
+  assert.match(featureDoc, /playwright-core/);
+  assert.match(skill, /--encrypted-card-number/);
+  assert.match(packageReadme, /buildUsageHistoryQuery/);
+  assert.match(packageReadme, /parseUsageHistoryList/);
+  assert.match(packageReadme, /inspectHipassPage/);
+  assert.match(packageReadme, /playwright-core/);
+});
+
 test("toss-securities package exposes safe read-only tossctl helpers", () => {
   const pkg = require(path.join(repoRoot, "packages", "toss-securities", "src", "index.js"));
 
@@ -1150,6 +1417,16 @@ test("toss-securities package exposes safe read-only tossctl helpers", () => {
   assert.equal(typeof pkg.getQuote, "function");
   assert.equal(typeof pkg.getQuoteBatch, "function");
   assert.equal(typeof pkg.listWatchlist, "function");
+});
+
+test("hipass-receipt package exposes fixture-friendly query, parse, and session helpers", () => {
+  const pkg = require(path.join(repoRoot, "packages", "hipass-receipt", "src", "index.js"));
+
+  assert.equal(pkg.HIPASS_ENDPOINTS.loginPage, "https://www.hipass.co.kr/comm/lginpg.do");
+  assert.equal(typeof pkg.buildUsageHistoryQuery, "function");
+  assert.equal(typeof pkg.parseUsageHistoryList, "function");
+  assert.equal(typeof pkg.inspectHipassPage, "function");
+  assert.equal(typeof pkg.buildReceiptRequest, "function");
 });
 
 test("toss-securities package README stays aligned with the read-only tossctl wrapper contract", () => {
@@ -1163,10 +1440,40 @@ test("toss-securities package README stays aligned with the read-only tossctl wr
   assert.match(packageReadme, /지원하지 않음|not supported/u);
 });
 
+test("hipass-receipt package README and npm metadata stay aligned with the helper contract", () => {
+  const packageReadme = read(path.join("packages", "hipass-receipt", "README.md"));
+  const packageJson = readJson(path.join("packages", "hipass-receipt", "package.json"));
+
+  assert.equal(packageJson.name, "hipass-receipt");
+  assert.match(packageJson.description, /Hi-Pass/);
+  assert.ok(packageJson.files.includes("test/fixtures"));
+  assert.match(packageReadme, /logged-in browser session/i);
+  assert.match(packageReadme, /Playwright/);
+  assert.equal(typeof packageJson.dependencies?.["playwright-core"], "string");
+  assert.match(packageReadme, /playwright-core/);
+  assert.match(packageReadme, /buildReceiptRequest/);
+  assert.match(packageReadme, /test\/fixtures\/usage-history-list\.html/);
+});
+
+test("hipass-receipt pack dry-run ships fixture-demo assets for the published README workflow", () => {
+  const packResult = JSON.parse(
+    childProcess.execFileSync("npm", ["pack", "--workspace", "hipass-receipt", "--json", "--dry-run"], {
+      cwd: repoRoot,
+      encoding: "utf8"
+    }),
+  );
+
+  const files = packResult[0]?.files?.map((entry) => entry.path) || [];
+  assert.ok(files.includes("test/fixtures/usage-history-list.html"));
+  assert.ok(files.includes("test/fixtures/login-page.html"));
+  assert.ok(files.includes("README.md"));
+});
+
 test("pack:dry-run includes the toss-securities workspace", () => {
   const packageJson = JSON.parse(read("package.json"));
 
   assert.match(packageJson.scripts["pack:dry-run"], /workspace toss-securities/);
+  assert.match(packageJson.scripts["pack:dry-run"], /workspace hipass-receipt/);
   assert.match(packageJson.scripts["pack:dry-run"], /workspace used-car-price-search/);
 });
 
@@ -1324,6 +1631,79 @@ test("joseon-sillok-search install payload includes the documented helper comman
   }
 });
 
+test("repository docs advertise the korean-patent-search skill and official KIPRIS Plus API setup", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const setup = read(path.join("docs", "setup.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const setupSkill = read(path.join("k-skill-setup", "SKILL.md"));
+  const examplesSecrets = read(path.join("examples", "secrets.env.example"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "korean-patent-search.md");
+  const featureDoc = read(path.join("docs", "features", "korean-patent-search.md"));
+  const skillPath = path.join(repoRoot, "korean-patent-search", "SKILL.md");
+  const skill = read(path.join("korean-patent-search", "SKILL.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const packageJson = readJson("package.json");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/korean-patent-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected korean-patent-search/SKILL.md to exist");
+
+  assert.match(readme, /\| 한국 특허 정보 검색 \|/);
+  assert.match(readme, /\[한국 특허 정보 검색 가이드\]\(docs\/features\/korean-patent-search\.md\)/);
+  assert.match(install, /--skill korean-patent-search/);
+  assert.match(install, /KIPRIS_PLUS_API_KEY/);
+  assert.match(install, /python3 scripts\/patent_search\.py --query "배터리"/);
+  assert.match(setup, /한국 특허 정보 검색의 KIPRIS Plus 경로용 `KIPRIS_PLUS_API_KEY`/);
+  assert.match(security, /KIPRIS_PLUS_API_KEY/);
+  assert.match(setupSkill, /한국 특허 정보 검색: `KIPRIS_PLUS_API_KEY`/);
+  assert.match(examplesSecrets, /^KIPRIS_PLUS_API_KEY=replace-me$/m);
+  assert.match(skill, /^name: korean-patent-search$/m);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /KIPRIS Plus/i);
+    assert.match(doc, /getWordSearch/);
+    assert.match(doc, /getBibliographyDetailInfoSearch/);
+    assert.match(doc, /ServiceKey/);
+    assert.match(doc, /python3 scripts\/patent_search\.py/);
+    assert.match(doc, /Done when/i);
+    assert.doesNotMatch(doc, /packages\/korean-patent-search/);
+    assert.doesNotMatch(doc, /python-packages\/korean-patent-search/);
+  }
+
+  assert.match(sources, /https:\/\/plus\.kipris\.or\.kr\/portal\/data\/service\/List\.do\?subTab=SC001&entYn=N&menuNo=200100/);
+  assert.match(sources, /https:\/\/www\.data\.go\.kr\/data\/15058788\/openapi\.do/);
+  assert.match(roadmap, /한국 특허 정보 검색 스킬 출시/);
+  assert.ok(
+    !packageJson.workspaces.some((workspace) => workspace.includes("korean-patent-search")),
+    "expected no repo workspace to be added for korean-patent-search",
+  );
+  assert.equal(fs.existsSync(path.join(repoRoot, "packages", "korean-patent-search")), false);
+});
+
+test("korean-patent-search install payload includes the documented helper command", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "korean-patent-search-"));
+  const installedSkillPath = path.join(tempRoot, "korean-patent-search");
+  const bundledHelperPath = path.join(installedSkillPath, "scripts", "patent_search.py");
+
+  try {
+    fs.cpSync(path.join(repoRoot, "korean-patent-search"), installedSkillPath, { recursive: true });
+
+    assert.ok(fs.existsSync(bundledHelperPath), "expected korean-patent-search/scripts/patent_search.py to exist");
+
+    const helpText = childProcess.execFileSync("python3", ["scripts/patent_search.py", "--help"], {
+      cwd: installedSkillPath,
+      encoding: "utf8",
+    });
+
+    assert.match(helpText, /Search Korean patent information via the official KIPRIS Plus Open API/);
+    assert.match(helpText, /--query/);
+    assert.match(helpText, /--application-number/);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("repository docs advertise the real-estate-search skill and proxy-based approach", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
@@ -1388,6 +1768,75 @@ test("real-estate-search skill uses proxy endpoints not MCP self-host", () => {
   }
 });
 
+test("repository docs advertise the korean-stock-search skill and proxy-backed KRX approach", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const setup = read(path.join("docs", "setup.md"));
+  const security = read(path.join("docs", "security-and-secrets.md"));
+  const setupSkill = read(path.join("k-skill-setup", "SKILL.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "korean-stock-search.md");
+  const featureDoc = read(path.join("docs", "features", "korean-stock-search.md"));
+  const skillPath = path.join(repoRoot, "korean-stock-search", "SKILL.md");
+  const skill = read(path.join("korean-stock-search", "SKILL.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const proxyReadme = read(path.join("packages", "k-skill-proxy", "README.md"));
+  const proxyDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
+  const packageJson = readJson("package.json");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/korean-stock-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected korean-stock-search/SKILL.md to exist");
+
+  assert.match(readme, /\| 한국 주식 정보 조회 \|/);
+  assert.match(readme, /\[한국 주식 정보 조회 가이드\]\(docs\/features\/korean-stock-search\.md\)/);
+  assert.match(install, /--skill korean-stock-search/);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /https:\/\/github\.com\/jjlabsio\/korea-stock-mcp/);
+    assert.match(doc, /k-skill-proxy\.nomadamas\.org/);
+    assert.match(doc, /\/v1\/korean-stock\/search/);
+    assert.match(doc, /\/v1\/korean-stock\/base-info/);
+    assert.match(doc, /\/v1\/korean-stock\/trade-info/);
+    assert.match(doc, /KRX_API_KEY/);
+    assert.match(doc, /사용자.*KRX_API_KEY.*(불필요|준비할 필요가 없)/u);
+    assert.doesNotMatch(doc, /packages\/korean-stock-search/);
+    assert.doesNotMatch(doc, /python-packages\/korean-stock-search/);
+  }
+
+  for (const doc of [setup, security, setupSkill]) {
+    assert.match(doc, /KRX_API_KEY/);
+  }
+
+  for (const doc of [proxyReadme, proxyDoc]) {
+    assert.match(doc, /\/v1\/korean-stock\/search/);
+    assert.match(doc, /\/v1\/korean-stock\/base-info/);
+    assert.match(doc, /\/v1\/korean-stock\/trade-info/);
+  }
+
+  assert.match(sources, /korea-stock-mcp: https:\/\/github\.com\/jjlabsio\/korea-stock-mcp/);
+  assert.match(roadmap, /한국 주식 정보 조회 스킬 출시/);
+  assert.ok(
+    !packageJson.workspaces.some((workspace) => workspace.includes("korean-stock-search")),
+    "expected no repo workspace to be added for korean-stock-search",
+  );
+  assert.equal(fs.existsSync(path.join(repoRoot, "packages", "korean-stock-search")), false);
+});
+
+test("korean-stock-search skill stays proxy-first and does not require local MCP install", () => {
+  const featureDoc = read(path.join("docs", "features", "korean-stock-search.md"));
+  const skill = read(path.join("korean-stock-search", "SKILL.md"));
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /k-skill-proxy\.nomadamas\.org\/v1\/korean-stock/);
+    assert.match(doc, /curl/);
+    assert.match(doc, /proxy.*서버.*KRX_API_KEY|KRX_API_KEY.*proxy.*서버/u);
+    assert.doesNotMatch(doc, /npx\s+(?:-y|--yes)\s+korea-stock-mcp/);
+    assert.doesNotMatch(doc, /codex mcp add/);
+    assert.doesNotMatch(doc, /claude_desktop_config\.json/);
+    assert.doesNotMatch(doc, /DART_API_KEY/);
+  }
+});
+
 test("repository docs advertise the shipped korean-spell-check helper assets", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
@@ -1398,6 +1847,96 @@ test("repository docs advertise the shipped korean-spell-check helper assets", (
   assert.equal(fs.existsSync(helperPath), true);
   assert.match(readme, /\[한국어 맞춤법 검사 가이드\]\(docs\/features\/korean-spell-check\.md\)/);
   assert.match(install, /python3 scripts\/korean_spell_check\.py/);
+});
+
+test("repository docs advertise the korean-character-count skill and deterministic counting contract", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "korean-character-count.md");
+  const featureDoc = read(path.join("docs", "features", "korean-character-count.md"));
+  const skillPath = path.join(repoRoot, "korean-character-count", "SKILL.md");
+  const skill = read(path.join("korean-character-count", "SKILL.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const packageJson = readJson("package.json");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/korean-character-count.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected korean-character-count/SKILL.md to exist");
+
+  assert.match(readme, /\| 한국어 글자 수 세기 \|/);
+  assert.match(readme, /\[한국어 글자 수 세기 가이드\]\(docs\/features\/korean-character-count\.md\)/);
+  assert.match(install, /--skill korean-character-count/);
+  assert.match(install, /node scripts\/korean_character_count\.js --text "가나다"/);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /grapheme|extended grapheme/i);
+    assert.match(doc, /UTF-8/);
+    assert.match(doc, /NEIS/i);
+    assert.match(doc, /CRLF|U\+2028|U\+2029/);
+    assert.match(doc, /node scripts\/korean_character_count\.js/);
+    assert.doesNotMatch(doc, /packages\/korean-character-count/);
+    assert.doesNotMatch(doc, /python-packages\/korean-character-count/);
+  }
+
+  assert.match(sources, /https:\/\/www\.unicode\.org\/reports\/tr29\//);
+  assert.match(sources, /https:\/\/encoding\.spec\.whatwg\.org\//);
+  assert.match(sources, /https:\/\/nodejs\.org\/api\/buffer\.html/);
+  assert.match(roadmap, /한국어 글자 수 세기 스킬 출시/);
+  assert.ok(
+    !packageJson.workspaces.some((workspace) => workspace.includes("korean-character-count")),
+    "expected no repo workspace to be added for korean-character-count",
+  );
+  assert.equal(fs.existsSync(path.join(repoRoot, "packages", "korean-character-count")), false);
+});
+
+test("korean-character-count feature doc NEIS example matches live helper output", () => {
+  const featureDoc = read(path.join("docs", "features", "korean-character-count.md"));
+  const helperOutput = childProcess.execFileSync(
+    "node",
+    [
+      "scripts/korean_character_count.js",
+      "--text",
+      "첫 줄\n둘째 줄🙂",
+      "--profile",
+      "neis",
+      "--format",
+      "text",
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  const bytesMatch = helperOutput.match(/^bytes:\s+(\d+)$/m);
+
+  assert.ok(bytesMatch, `expected helper text output to include a bytes line, got: ${helperOutput}`);
+  assert.equal(bytesMatch[1], "23");
+  assert.match(featureDoc, new RegExp(String.raw`bytes:\s+${bytesMatch[1]}`));
+  assert.match(featureDoc, /bytes=23/);
+});
+
+test("korean-character-count install payload includes the documented helper command", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "korean-character-count-"));
+  const installedSkillPath = path.join(tempRoot, "korean-character-count");
+  const bundledHelperPath = path.join(installedSkillPath, "scripts", "korean_character_count.js");
+
+  try {
+    fs.cpSync(path.join(repoRoot, "korean-character-count"), installedSkillPath, { recursive: true });
+
+    assert.ok(
+      fs.existsSync(bundledHelperPath),
+      "expected korean-character-count/scripts/korean_character_count.js to exist",
+    );
+
+    const helpText = childProcess.execFileSync("node", ["scripts/korean_character_count.js", "--help"], {
+      cwd: installedSkillPath,
+      encoding: "utf8",
+    });
+
+    assert.match(helpText, /--profile/);
+    assert.match(helpText, /default/);
+    assert.match(helpText, /neis/i);
+    assert.match(helpText, /--stdin/);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("repository docs advertise the cheap-gas-nearby skill and Opinet key requirements", () => {
@@ -1493,4 +2032,61 @@ test("repository docs advertise the han-river-water-level skill and rollout-pend
   assert.match(sources, /hrfco\.go\.kr\/web\/openapiPage\/reference\.do/);
   assert.match(sources, /api\.hrfco\.go\.kr/);
   assert.match(roadmap, /한강 수위 정보 조회 스킬 출시/);
+});
+
+
+test("repository docs advertise the MFDS drug and food safety skills", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const drugFeatureDocPath = path.join(repoRoot, "docs", "features", "mfds-drug-safety.md");
+  const foodFeatureDocPath = path.join(repoRoot, "docs", "features", "mfds-food-safety.md");
+  const drugSkillPath = path.join(repoRoot, "mfds-drug-safety", "SKILL.md");
+  const foodSkillPath = path.join(repoRoot, "mfds-food-safety", "SKILL.md");
+
+  assert.equal(fs.existsSync(drugFeatureDocPath), true);
+  assert.equal(fs.existsSync(foodFeatureDocPath), true);
+  assert.equal(fs.existsSync(drugSkillPath), true);
+  assert.equal(fs.existsSync(foodSkillPath), true);
+  assert.match(readme, /\| 의약품 안전 체크 \|/);
+  assert.match(readme, /\| 식품 안전 체크 \|/);
+  assert.match(readme, /\[의약품 안전 체크 가이드\]\(docs\/features\/mfds-drug-safety\.md\)/);
+  assert.match(readme, /\[식품 안전 체크 가이드\]\(docs\/features\/mfds-food-safety\.md\)/);
+  assert.match(install, /--skill mfds-drug-safety/);
+  assert.match(install, /--skill mfds-food-safety/);
+  assert.match(sources, /15075057\/openapi\.do/);
+  assert.match(sources, /15097208\/openapi\.do/);
+  assert.match(sources, /15056516\/openapi\.do/);
+  assert.match(sources, /foodsafetykorea\.go\.kr\/api\/openApiInfo\.do/);
+});
+
+test("MFDS public-health skill docs require interview-first safety flow and official endpoints", () => {
+  const drugSkill = read(path.join("mfds-drug-safety", "SKILL.md"));
+  const foodSkill = read(path.join("mfds-food-safety", "SKILL.md"));
+  const drugFeatureDoc = read(path.join("docs", "features", "mfds-drug-safety.md"));
+  const foodFeatureDoc = read(path.join("docs", "features", "mfds-food-safety.md"));
+  const sources = read(path.join("docs", "sources.md"));
+
+  for (const doc of [drugSkill, drugFeatureDoc]) {
+    assert.match(doc, /증상.*바로 단정하지 말고.*먼저 되묻/);
+    assert.match(doc, /호흡곤란|의식저하|심한 발진/);
+    assert.match(doc, /DrbEasyDrugInfoService\/getDrbEasyDrugList/);
+    assert.match(doc, /SafeStadDrugService\/getSafeStadDrugInq/);
+    assert.match(doc, /DATA_GO_KR_API_KEY/);
+    assert.match(doc, /python3 scripts\/mfds_drug_safety\.py/);
+  }
+
+  for (const doc of [foodSkill, foodFeatureDoc]) {
+    assert.match(doc, /증상.*바로 단정하지 말고.*먼저 되묻/);
+    assert.match(doc, /혈변|탈수|호흡곤란/);
+    assert.match(doc, /PrsecImproptFoodInfoService03\/getPrsecImproptFoodList01/);
+    assert.match(doc, /I0490/);
+    assert.match(doc, /DATA_GO_KR_API_KEY/);
+    assert.match(doc, /python3 scripts\/mfds_food_safety\.py/);
+    assert.match(doc, /https:\/\/openapi\.foodsafetykorea\.go\.kr\/api\/sample\/I0490\/json\/1\/5/);
+    assert.doesNotMatch(doc, /http:\/\/openapi\.foodsafetykorea\.go\.kr/);
+  }
+
+  assert.match(sources, /https:\/\/openapi\.foodsafetykorea\.go\.kr\/api\/sample\/I0490\/json\/1\/5/);
+  assert.doesNotMatch(sources, /http:\/\/openapi\.foodsafetykorea\.go\.kr/);
 });
