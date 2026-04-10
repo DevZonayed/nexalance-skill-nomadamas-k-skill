@@ -13,6 +13,7 @@ from typing import Callable
 LOST112_LIST_URL = "https://www.lost112.go.kr/find/findList.do"
 LOST112_REFERER_URL = "https://www.lost112.go.kr/"
 LOST112_OUTPUT_FILE = "lost112-search-result.html"
+LOST112_CURL_MAX_TIME = 60
 SEOUL_METRO_LOST_CENTER_URL = "https://www.seoulmetro.co.kr/kr/page.do?menuIdx=541"
 CURL_USER_AGENT = "Mozilla/5.0"
 
@@ -117,7 +118,7 @@ def _base_curl_command(url: str | None, max_time: int, *, follow_redirects: bool
 
 
 def build_curl_command(payload: dict[str, str]) -> str:
-    command = _base_curl_command("", 20, follow_redirects=False)
+    command = _base_curl_command("", LOST112_CURL_MAX_TIME, follow_redirects=False)
     command.extend(["--referer", LOST112_REFERER_URL])
     for key, value in payload.items():
         if value:

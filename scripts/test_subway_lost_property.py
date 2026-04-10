@@ -60,6 +60,8 @@ class SubwayLostPropertyQueryTest(unittest.TestCase):
         self.assertIn("강남", plan.suggested_keywords)
         command = shlex.split(build_curl_command(plan.payload))
         self.assertNotIn("-L", command)
+        self.assertIn("--max-time", command)
+        self.assertEqual(command[command.index("--max-time") + 1], "60")
         self.assertIn("--referer", command)
         self.assertEqual(command[command.index("--referer") + 1], "https://www.lost112.go.kr/")
         self.assertIn("--output", command)
