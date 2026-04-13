@@ -146,6 +146,40 @@ def search_food_safety(
     return request_json(request)
 
 
+def search_health_food_ingredient(
+    query: str,
+    *,
+    limit: int = 10,
+    base_url: str | None = None,
+    request_json: Any = read_json_response,
+) -> dict[str, Any]:
+    resolved_base_url = resolve_proxy_base_url(base_url)
+    url = f"{resolved_base_url}/v1/mfds/food-safety/health-food-ingredient"
+    params = urllib.parse.urlencode({"query": query, "limit": str(limit)})
+    request = urllib.request.Request(
+        f"{url}?{params}",
+        headers={"Accept": "application/json", "User-Agent": "k-skill-mfds/1.0"},
+    )
+    return request_json(request)
+
+
+def search_inspection_fail(
+    query: str,
+    *,
+    limit: int = 10,
+    base_url: str | None = None,
+    request_json: Any = read_json_response,
+) -> dict[str, Any]:
+    resolved_base_url = resolve_proxy_base_url(base_url)
+    url = f"{resolved_base_url}/v1/mfds/food-safety/inspection-fail"
+    params = urllib.parse.urlencode({"query": query, "limit": str(limit)})
+    request = urllib.request.Request(
+        f"{url}?{params}",
+        headers={"Accept": "application/json", "User-Agent": "k-skill-mfds/1.0"},
+    )
+    return request_json(request)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MFDS food-safety helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -158,6 +192,16 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--query", required=True)
     search.add_argument("--limit", type=int, default=10)
     search.add_argument("--proxy-base-url")
+
+    ingredient = subparsers.add_parser("health-food-ingredient", help="search health food ingredient recognition status")
+    ingredient.add_argument("--query", required=True)
+    ingredient.add_argument("--limit", type=int, default=10)
+    ingredient.add_argument("--proxy-base-url")
+
+    inspection = subparsers.add_parser("inspection-fail", help="search domestic inspection failure records")
+    inspection.add_argument("--query", required=True)
+    inspection.add_argument("--limit", type=int, default=10)
+    inspection.add_argument("--proxy-base-url")
     return parser
 
 
@@ -171,6 +215,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "search":
         try:
             payload = search_food_safety(args.query, limit=args.limit, base_url=args.proxy_base_url)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        except (ValueError, ApiError) as error:
+            print(json.dumps({"error": str(error)}, ensure_ascii=False, indent=2), file=sys.stderr)
+            return 1
+
+    if args.command == "health-food-ingredient":
+        try:
+            payload = search_health_food_ingredient(args.query, limit=args.limit, base_url=args.proxy_base_url)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        except (ValueError, ApiError) as error:
+            print(json.dumps({"error": str(error)}, ensure_ascii=False, indent=2), file=sys.stderr)
+            return 1
+
+    if args.command == "inspection-fail":
+        try:
+            payload = search_inspection_fail(args.query, limit=args.limit, base_url=args.proxy_base_url)
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             return 0
         except (ValueError, ApiError) as error:

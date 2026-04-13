@@ -7,6 +7,8 @@ const { KRX_MARKETS, fetchBaseInfo, fetchTradeInfo, getCurrentKstDate, searchSto
 const {
   fetchMfdsDrugLookup,
   fetchMfdsFoodSafetySearch,
+  fetchHealthFoodIngredient,
+  fetchInspectionFail,
   normalizeMfdsDrugLookupQuery,
   normalizeMfdsFoodSafetyQuery
 } = require("./mfds");
@@ -1787,7 +1789,127 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
     cache.set(cacheKey, payload, config.cacheTtlMs);
     return payload;
   });
-  
+
+  app.get("/v1/mfds/food-safety/health-food-ingredient", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeMfdsFoodSafetyQuery(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({
+      route: "mfds-health-food-ingredient",
+      ...normalized,
+      hasKey: Boolean(config.foodsafetyKoreaApiKey)
+    });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return {
+        ...cached,
+        proxy: {
+          ...cached.proxy,
+          cache: {
+            hit: true,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    let payload;
+    try {
+      payload = await fetchHealthFoodIngredient({
+        query: normalized.query,
+        limit: normalized.limit,
+        foodsafetyKoreaApiKey: config.foodsafetyKoreaApiKey
+      });
+    } catch (error) {
+      reply.code(error.statusCode && error.statusCode >= 400 ? error.statusCode : 502);
+      return {
+        error: error.code || "proxy_error",
+        message: error.message
+      };
+    }
+
+    payload.proxy = {
+      name: config.proxyName,
+      cache: {
+        hit: false,
+        ttl_ms: config.cacheTtlMs
+      },
+      requested_at: new Date().toISOString()
+    };
+
+    cache.set(cacheKey, payload, config.cacheTtlMs);
+    return payload;
+  });
+
+  app.get("/v1/mfds/food-safety/inspection-fail", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeMfdsFoodSafetyQuery(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({
+      route: "mfds-inspection-fail",
+      ...normalized,
+      hasKey: Boolean(config.foodsafetyKoreaApiKey)
+    });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return {
+        ...cached,
+        proxy: {
+          ...cached.proxy,
+          cache: {
+            hit: true,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    let payload;
+    try {
+      payload = await fetchInspectionFail({
+        query: normalized.query,
+        limit: normalized.limit,
+        foodsafetyKoreaApiKey: config.foodsafetyKoreaApiKey
+      });
+    } catch (error) {
+      reply.code(error.statusCode && error.statusCode >= 400 ? error.statusCode : 502);
+      return {
+        error: error.code || "proxy_error",
+        message: error.message
+      };
+    }
+
+    payload.proxy = {
+      name: config.proxyName,
+      cache: {
+        hit: false,
+        ttl_ms: config.cacheTtlMs
+      },
+      requested_at: new Date().toISOString()
+    };
+
+    cache.set(cacheKey, payload, config.cacheTtlMs);
+    return payload;
+  });
+
   app.get("/v1/korean-stock/search", async (request, reply) => {
     let normalized;
 
