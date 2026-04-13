@@ -16,11 +16,15 @@ client/skill -> k-skill-proxy -> upstream public API
 
 - `GET /health`
 - `GET /v1/fine-dust/report`
+- `GET /v1/korea-weather/forecast`
 - `GET /v1/seoul-subway/arrival`
 - `GET /v1/han-river/water-level`
+- `GET /v1/household-waste/info` (생활쓰레기 배출정보, `DATA_GO_KR_API_KEY`; 쿼리 `pageNo`·`numOfRows` 필수, 값 `1`·`100`)
+- `GET /v1/korean-stock/search`
+- `GET /v1/korean-stock/base-info`
+- `GET /v1/korean-stock/trade-info`
 - `GET /v1/opinet/around`
 - `GET /v1/opinet/detail`
-- `GET /v1/household-waste/info` (생활쓰레기 배출정보, `DATA_GO_KR_API_KEY`)
 - `GET /v1/neis/school-search` (나이스 학교기본정보, `KEDU_INFO_KEY`)
 - `GET /v1/neis/school-meal` (나이스 급식식단정보, `KEDU_INFO_KEY`)
 - `GET /B552584/:service/:operation` (허용된 AirKorea route passthrough)
@@ -34,11 +38,13 @@ client/skill -> k-skill-proxy -> upstream public API
 프록시 서버 쪽:
 
 - `AIR_KOREA_OPEN_API_KEY=...`
+- `KMA_OPEN_API_KEY=...`
 - `SEOUL_OPEN_API_KEY=...`
 - `HRFCO_OPEN_API_KEY=...`
 - `OPINET_API_KEY=...`
-- `DATA_GO_KR_API_KEY=...` (생활쓰레기 배출정보 upstream key)
+- `DATA_GO_KR_API_KEY=...`
 - `KEDU_INFO_KEY=...` (나이스 교육정보 개방 포털 Open API 인증키)
+- `KRX_API_KEY=...`
 - `KSKILL_PROXY_PORT=4020`
 
 ## 프로덕션 배포 구조
@@ -101,6 +107,14 @@ curl -fsS --get 'http://127.0.0.1:4020/v1/seoul-subway/arrival' \
   --data-urlencode 'stationName=강남'
 ```
 
+한국 날씨 endpoint:
+
+```bash
+curl -fsS --get 'http://127.0.0.1:4020/v1/korea-weather/forecast' \
+  --data-urlencode 'lat=37.5665' \
+  --data-urlencode 'lon=126.9780'
+```
+
 한강 수위 정보 endpoint:
 
 ```bash
@@ -127,17 +141,6 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/opinet/detail' \
   --data-urlencode 'id=A0009905'
 ```
 
-생활쓰레기 배출정보 endpoint:
-
-```bash
-curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/household-waste/info' \
-  --data-urlencode 'cond[SGG_NM::LIKE]=강남구' \
-  --data-urlencode 'pageNo=1' \
-  --data-urlencode 'numOfRows=100'
-```
-
-이 endpoint 는 `DATA_GO_KR_API_KEY`를 프록시 서버에서만 주입하고 `returnType=json`을 강제합니다. `pageNo`는 정확히 `1`만 허용하고 `numOfRows`는 정확히 `100`만 허용합니다.
-
 나이스 학교 검색·급식 endpoint (학교 급식 식단 스킬에서 사용):
 
 ```bash
@@ -152,6 +155,33 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/neis/school-meal' \
   --data-urlencode 'schoolCode=7010123' \
   --data-urlencode 'mealDate=20260410'
 ```
+
+생활쓰레기 배출정보 endpoint. 쿼리에 **`pageNo`와 `numOfRows`를 반드시 포함**하고, 값은 각각 **`1`**, **`100`**만 허용한다(`page_no` / `num_of_rows` 동일). 누락·다른 값·숫자만이 아닌 문자열이면 **`400`**(upstream 미호출):
+
+```bash
+curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/household-waste/info' \
+  --data-urlencode 'cond[SGG_NM::LIKE]=강남구' \
+  --data-urlencode 'pageNo=1' \
+  --data-urlencode 'numOfRows=100'
+```
+
+한국 주식 검색 endpoint:
+
+```bash
+curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/korean-stock/search' \
+  --data-urlencode 'q=삼성전자' \
+  --data-urlencode 'bas_dd=20260404'
+```
+
+한국 주식 기본정보 endpoint:
+
+```bash
+curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/korean-stock/base-info' \
+  --data-urlencode 'market=KOSPI' \
+  --data-urlencode 'code=005930' \
+  --data-urlencode 'bas_dd=20260404'
+```
+
 
 AirKorea passthrough endpoint:
 
@@ -168,5 +198,7 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/B552584/ArpltnInforInqireSv
 ## 주의할 점
 
 - upstream key는 프록시 서버에서만 관리합니다.
+- 한국 주식 route도 사용자에게 `KRX_API_KEY` 를 배포하지 않습니다.
 - client 쪽에는 upstream API key를 배포하지 않습니다.
-- public hosted route rollout 이 끝나기 전에는 서울 지하철 예시를 local/self-host URL 로 검증합니다.
+- public hosted route rollout 이 끝나기 전에는 서울 지하철/한국 날씨 예시를 local/self-host URL 로 검증합니다.
+- public hosted route rollout 이 끝나기 전에는 한강 수위 route도 local/self-host 또는 배포 확인이 끝난 proxy URL 로 검증합니다.

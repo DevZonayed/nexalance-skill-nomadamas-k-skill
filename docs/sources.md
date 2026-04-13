@@ -8,6 +8,11 @@
 - `korail2` anti-bot bypass PR #54: https://github.com/carpedm20/korail2/pull/54
 - `kbo-game`: https://github.com/vkehfdl1/kbo-game
 - tossinvest-cli: https://github.com/JungHoonGhae/tossinvest-cli
+- 하이패스 메인: https://www.hipass.co.kr/main.do
+- 하이패스 로그인: https://www.hipass.co.kr/comm/lginpg.do
+- 하이패스 사용내역 조회 진입: https://www.hipass.co.kr/usepculr/InitUsePculrTabSearch.do
+- 하이패스 사용내역 이용안내: https://www.hipass.co.kr/html/guide/siteguide_6.jsp
+- 하이패스 사용내역 이용안내(do): https://www.hipass.co.kr/info/guide/siteguide_6.do
 - K League 일정/결과 JSON: https://www.kleague.com/getScheduleList.do
 - K League 팀 순위 JSON: https://www.kleague.com/record/teamRank.do
 - jerjangmin original `lck-analytics` skill pack: https://github.com/jerjangmin/share/tree/main/SKILL/lck-analytics
@@ -22,6 +27,19 @@
 - `hwp-mcp`: https://github.com/jkf87/hwp-mcp
 - korean-law-mcp: https://github.com/chrisryugj/korean-law-mcp
 - real-estate-mcp: https://github.com/tae0y/real-estate-mcp/tree/main
+- korea-stock-mcp: https://github.com/jjlabsio/korea-stock-mcp
+- 공공데이터포털 의약품개요정보(e약은요): https://www.data.go.kr/data/15075057/openapi.do
+- 식약처 e약은요 endpoint: https://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList
+- 공공데이터포털 안전상비의약품 정보: https://www.data.go.kr/data/15097208/openapi.do
+- 식약처 안전상비의약품 endpoint: https://apis.data.go.kr/1471000/SafeStadDrugService/getSafeStadDrugInq
+- 공공데이터포털 검사 부적합 식품정보: https://www.data.go.kr/data/15056516/openapi.do
+- 식약처 부적합 식품 endpoint: https://apis.data.go.kr/1471000/PrsecImproptFoodInfoService03/getPrsecImproptFoodList01
+- 공공데이터포털 식품 회수·판매중지 정보: https://www.data.go.kr/data/15074318/openapi.do
+- 식품안전나라 I0490 안내: https://www.foodsafetykorea.go.kr/api/openApiInfo.do?menu_grp=MENU_GRP31&menu_no=661&show_cnt=10&start_idx=1&svc_no=I0490&svc_type_cd=API_TYPE06
+- 식품안전나라 I0490 sample: https://openapi.foodsafetykorea.go.kr/api/sample/I0490/json/1/5
+- KRX OPEN API 메인: https://openapi.krx.co.kr/contents/OPP/MAIN/main/index.cmd
+- KRX 종목 기본정보 API (KOSPI): http://data-dbg.krx.co.kr/svc/apis/sto/stk_isu_base_info
+- KRX 일별 매매정보 API (KOSPI): http://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd
 - MOLIT 아파트 매매 실거래가 API: https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade
 - MOLIT 아파트 전월세 API: https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent
 - MOLIT 오피스텔 매매 API: https://apis.data.go.kr/1613000/RTMSDataSvcOffiTrade/getRTMSDataSvcOffiTrade
@@ -41,6 +59,11 @@
 - 바른한글 이전 버전: https://nara-speller.co.kr/old_speller/
 - 바른한글 이전 버전 결과 POST 표면: https://nara-speller.co.kr/old_speller/results
 - 바른한글 robots: https://nara-speller.co.kr/robots.txt
+- Unicode Text Segmentation (UAX #29): https://www.unicode.org/reports/tr29/
+- Unicode Normalization Forms (UAX #15): https://www.unicode.org/reports/tr15/
+- WHATWG Encoding Standard: https://encoding.spec.whatwg.org/
+- Node Buffer.byteLength: https://nodejs.org/api/buffer.html
+- 2023 학교생활기록부 기재요령(경기도교육청 PDF): https://www.goe.go.kr/resource/old/BBSMSTR_000000030136/BBS_202302211104253520.pdf
 - 다이소몰 매장 검색: https://www.daisomall.co.kr/api/ms/msg/selStr
 - 다이소몰 매장 검색어 목록: https://www.daisomall.co.kr/api/ms/msg/selStrSrchKeyword
 - 다이소몰 매장 상세: https://www.daisomall.co.kr/api/dl/dla-api/selStrInfo
@@ -49,6 +72,9 @@
 - 다이소몰 상품 요약 목록: https://www.daisomall.co.kr/ssn/search/GoodsMummResult
 - 다이소몰 매장 픽업 재고: https://www.daisomall.co.kr/api/pd/pdh/selStrPkupStck
 - 다이소몰 온라인 재고: https://www.daisomall.co.kr/api/pdo/selOnlStck
+- 마켓컬리 검색 API(v4): https://api.kurly.com/search/v4/sites/market/normal-search
+- 마켓컬리 검색 개수 API(v3): https://api.kurly.com/search/v3/sites/market/normal-search/count
+- 마켓컬리 상품 상세 페이지 예시: https://www.kurly.com/goods/5063110
 - olive-young / multi-retail upstream repo (`hmmhmmhm/daiso-mcp`): https://github.com/hmmhmmhm/daiso-mcp
 - olive-young CLI package (`daiso`): https://www.npmjs.com/package/daiso
 - olive-young stores API: https://mcp.aka.page/api/oliveyoung/stores
@@ -57,6 +83,8 @@
 - daiso/olive-young public MCP endpoint: https://mcp.aka.page/mcp
 - coupang-mcp (MCP 서버): https://github.com/uju777/coupang-mcp
 - coupang-mcp endpoint: https://yuju777-coupang-mcp.hf.space/mcp
+- bunjang-cli package: https://www.npmjs.com/package/bunjang-cli
+- bunjang-cli repo: https://github.com/pinion05/bunjangcli
 - 블루리본 메인: https://www.bluer.co.kr/
 - 블루리본 지역 검색: https://www.bluer.co.kr/search/zone
 - 블루리본 주변 맛집 JSON: https://www.bluer.co.kr/restaurants/map
@@ -65,11 +93,20 @@
 - 조선왕조실록 메인: https://sillok.history.go.kr
 - 조선왕조실록 검색 결과: https://sillok.history.go.kr/search/searchResultList.do
 - 조선왕조실록 기사 상세: https://sillok.history.go.kr/id/kda_12512030_002
+- KIPRIS Plus 특허/실용신안 API 목록: https://plus.kipris.or.kr/portal/data/service/List.do?subTab=SC001&entYn=N&menuNo=200100
+- 공공데이터포털 특허/실용신안 정보 검색 서비스: https://www.data.go.kr/data/15058788/openapi.do
+- KIPRIS Plus 특허/실용신안 검색 endpoint: https://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice/getWordSearch
+- KIPRIS Plus 특허/실용신안 서지상세 endpoint: https://plus.kipris.or.kr/kipo-api/kipi/patUtiModInfoSearchSevice/getBibliographyDetailInfoSearch
 - Opinet 오픈 API 안내: https://www.opinet.co.kr/user/custapi/openApiInfo.do
 - Opinet 반경 내 주유소 API: https://www.opinet.co.kr/api/aroundAll.do
 - Opinet 주유소 상세정보 API: https://www.opinet.co.kr/api/detailById.do
 - Opinet 지역코드 API: https://www.opinet.co.kr/api/areaCode.do
 - 서울특별시 지하철 실시간 도착정보: https://www.data.go.kr/data/15058052/openapi.do
+- 경찰청 LOST112 습득물 목록: https://www.lost112.go.kr/find/findList.do
+- 서울교통공사 유실물센터: https://www.seoulmetro.co.kr/kr/page.do?menuIdx=541
+- GeekNews public RSS/Atom feed: https://feeds.feedburner.com/geeknews-feed
+- GeekNews home: https://news.hada.io
+- 기상청 단기예보 조회서비스: https://www.data.go.kr/data/15084084/openapi.do
 - 에어코리아 대기오염정보: https://www.data.go.kr/data/15073861/openapi.do
 - 에어코리아 측정소정보: https://www.data.go.kr/data/15073877/openapi.do
 - 한강홍수통제소 Open API 레퍼런스: https://www.hrfco.go.kr/web/openapiPage/reference.do
@@ -77,6 +114,7 @@
 - 한강홍수통제소 Open API 정책: https://www.hrfco.go.kr/web/openapi/policy.do
 - 한강홍수통제소 API base: https://api.hrfco.go.kr
 - 우체국 도로명주소 검색: https://parcel.epost.go.kr/parcel/comm/zipcode/comm_newzipcd_list.jsp
+- 우체국 통합 우편번호/영문주소 검색: https://www.epost.kr/search.RetrieveIntegrationNewZipCdList.comm
 - CJ대한통운 배송조회: https://www.cjlogistics.com/ko/tool/parcel/tracking
 - CJ대한통운 배송상세 JSON: https://www.cjlogistics.com/ko/tool/parcel/tracking-detail
 - 우체국 배송조회: https://service.epost.go.kr/trace.RetrieveRegiPrclDeliv.postal?sid1=
