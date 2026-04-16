@@ -2090,3 +2090,39 @@ test("MFDS public-health skill docs require interview-first safety flow and offi
   assert.match(sources, /https:\/\/openapi\.foodsafetykorea\.go\.kr\/api\/sample\/I0490\/json\/1\/5/);
   assert.doesNotMatch(sources, /http:\/\/openapi\.foodsafetykorea\.go\.kr/);
 });
+
+test("hola-poke-yeoksam skill docs advertise menu, shop-info, and event-entry flows", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const roadmap = read(path.join("docs", "roadmap.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "hola-poke-yeoksam.md");
+  const skillPath = path.join(repoRoot, "hola-poke-yeoksam", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/hola-poke-yeoksam.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected hola-poke-yeoksam/SKILL.md to exist");
+
+  const featureDoc = read(path.join("docs", "features", "hola-poke-yeoksam.md"));
+  const skill = read(path.join("hola-poke-yeoksam", "SKILL.md"));
+
+  assert.match(readme, /\| 올라포케 역삼 포케 \|/);
+  assert.match(readme, /\[올라포케 역삼 포케 가이드\]\(docs\/features\/hola-poke-yeoksam\.md\)/);
+  assert.match(install, /--skill hola-poke-yeoksam/);
+  assert.match(sources, /mnspkm\/hola-poke-yeoksam-skill/);
+  assert.match(roadmap, /올라포케 역삼 포케 스킬 출시/);
+
+  assert.match(skill, /^name: hola-poke-yeoksam$/m);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /올라포케 역삼점/);
+    assert.match(doc, /get_menu/);
+    assert.match(doc, /get_shop_info/);
+    assert.match(doc, /enter_event/);
+    assert.match(doc, /이름(?:·|\/)?이메일.*받지 않/);
+    assert.match(doc, /already_entered_today/);
+    assert.match(doc, /message.*글자 그대로/);
+    assert.match(doc, /주문\/결제\/배달앱 자동화는 하지 않/);
+    assert.match(doc, /01012345678|010-1234-5678/);
+    assert.match(doc, /hola-poke-yeoksam-skill\.onrender\.com\/mcp/);
+  }
+});
