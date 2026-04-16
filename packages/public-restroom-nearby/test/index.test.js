@@ -121,6 +121,19 @@ test("searchNearbyPublicRestroomsByCoordinates queries the official CSV and retu
   assert.deepEqual(calls, ["https://file.localdata.go.kr/file/download/public_restroom_info/info"]);
 });
 
+test("searchNearbyPublicRestroomsByCoordinates forwards maxDistanceMeters to the CSV normalization path", async () => {
+  const result = await searchNearbyPublicRestroomsByCoordinates({
+    latitude: 37.57371315593711,
+    longitude: 126.97833785777944,
+    limit: 5,
+    maxDistanceMeters: 100,
+    fetchImpl: async () => makeResponse(Buffer.from(csvFixture, "utf8"))
+  });
+
+  assert.equal(result.items.length, 0);
+  assert.equal(result.meta.total, 0);
+});
+
 test("searchNearbyPublicRestroomsByLocationQuery resolves a Kakao anchor, narrows to the regional CSV, and returns nearest restrooms", async () => {
   const calls = [];
   const fetchImpl = async (url) => {
@@ -157,6 +170,91 @@ test("searchNearbyPublicRestroomsByLocationQuery resolves a Kakao anchor, narrow
     "https://place-api.map.kakao.com/places/panel3/1001",
     "https://file.localdata.go.kr/file/download/public_restroom_info/info?orgCode=6110000_ALL"
   ]);
+});
+
+test("searchNearbyPublicRestroomsByLocationQuery falls through to later Kakao candidates when a panel request fails", async () => {
+  const calls = [];
+  const multiCandidateSearchHtml = `
+    <ul>
+      <li class="search_item base" data-id="1001" data-title="광화문">
+        <strong class="tit_g">광화문</strong>
+        <span class="txt_ginfo">역사유적지</span>
+        <span class="txt_g">서울특별시 종로구 세종로 1-68</span>
+      </li>
+      <li class="search_item base" data-id="1002" data-title="광화문광장">
+        <strong class="tit_g">광화문광장</strong>
+        <span class="txt_ginfo">광장</span>
+        <span class="txt_g">서울특별시 종로구 세종대로 172</span>
+      </li>
+    </ul>
+  `;
+  const fallbackPanel = {
+    summary: {
+      ...anchorPanel.summary,
+      confirm_id: "1002",
+      name: "광화문광장"
+    }
+  };
+  const fetchImpl = async (url) => {
+    const resolved = String(url);
+    calls.push(resolved);
+
+    if (resolved.startsWith("https://m.map.kakao.com/actions/searchView?q=%EA%B4%91%ED%99%94%EB%AC%B8")) {
+      return makeResponse(multiCandidateSearchHtml, "text/html");
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/1001") {
+      return { ok: false, status: 500 };
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/1002") {
+      return makeResponse(fallbackPanel, "application/json");
+    }
+
+    if (resolved === "https://file.localdata.go.kr/file/download/public_restroom_info/info?orgCode=6110000_ALL") {
+      return makeResponse(Buffer.from(csvFixture, "utf8"));
+    }
+
+    throw new Error(`unexpected url: ${resolved}`);
+  };
+
+  const result = await searchNearbyPublicRestroomsByLocationQuery("광화문", {
+    limit: 2,
+    fetchImpl
+  });
+
+  assert.equal(result.anchor.id, "1002");
+  assert.equal(result.anchor.name, "광화문광장");
+  assert.equal(result.items.length, 2);
+  assert.deepEqual(calls, [
+    "https://m.map.kakao.com/actions/searchView?q=%EA%B4%91%ED%99%94%EB%AC%B8",
+    "https://place-api.map.kakao.com/places/panel3/1001",
+    "https://place-api.map.kakao.com/places/panel3/1002",
+    "https://file.localdata.go.kr/file/download/public_restroom_info/info?orgCode=6110000_ALL"
+  ]);
+});
+
+test("searchNearbyPublicRestroomsByLocationQuery still surfaces non-HTTP Kakao panel errors", async () => {
+  const fetchImpl = async (url) => {
+    const resolved = String(url);
+
+    if (resolved.startsWith("https://m.map.kakao.com/actions/searchView?q=%EA%B4%91%ED%99%94%EB%AC%B8")) {
+      return makeResponse(anchorSearchHtml, "text/html");
+    }
+
+    if (resolved === "https://place-api.map.kakao.com/places/panel3/1001") {
+      throw new Error("socket hang up");
+    }
+
+    throw new Error(`unexpected url: ${resolved}`);
+  };
+
+  await assert.rejects(
+    searchNearbyPublicRestroomsByLocationQuery("광화문", {
+      fetchImpl
+    }),
+    /socket hang up/
+  );
 });
 
 function makeResponse(body, contentType = "text/csv;charset=UTF-8") {

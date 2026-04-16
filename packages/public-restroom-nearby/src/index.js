@@ -43,7 +43,10 @@ async function request(url, options = {}, responseType = "text") {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status} for ${url}`);
+    const error = new Error(`Request failed with ${response.status} for ${url}`);
+    error.status = response.status;
+    error.url = url;
+    throw error;
   }
 
   if (responseType === "json") {
@@ -68,13 +71,30 @@ async function fetchPlacePanel(confirmId, options = {}) {
   return request(`${PLACE_PANEL_URL_BASE}/${confirmId}`, { ...options, headerSet: DEFAULT_PANEL_HEADERS }, "json");
 }
 
+function isRecoverablePlacePanelError(error) {
+  const status = Number(error?.status);
+
+  return Number.isInteger(status) && status >= 400 && status < 600;
+}
+
 async function resolveAnchor(locationQuery, options = {}) {
   const anchorSearchHtml = await fetchSearchResults(locationQuery, options);
   const anchorCandidates = parseSearchResultsHtml(anchorSearchHtml);
   const rankedCandidates = rankAnchorCandidates(locationQuery, anchorCandidates);
 
   for (const candidate of rankedCandidates) {
-    const anchorPanel = await fetchPlacePanel(candidate.id, options);
+    let anchorPanel;
+
+    try {
+      anchorPanel = await fetchPlacePanel(candidate.id, options);
+    } catch (error) {
+      if (isRecoverablePlacePanelError(error)) {
+        continue;
+      }
+
+      throw error;
+    }
+
     const anchor = normalizeAnchorPanel(anchorPanel, candidate);
 
     if (Number.isFinite(anchor.latitude) && Number.isFinite(anchor.longitude)) {
@@ -133,6 +153,7 @@ async function searchNearbyPublicRestroomsByCoordinates(options = {}) {
 
   const dataset = await fetchDatasetCsv(options);
   const allItems = normalizePublicRestroomRows(dataset.csvText, { latitude, longitude }, {
+    maxDistanceMeters: options.maxDistanceMeters,
     preferredDistrict: options.preferredDistrict
   });
 
