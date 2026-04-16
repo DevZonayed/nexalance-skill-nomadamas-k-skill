@@ -73,7 +73,8 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/korean-stock/trade-info'
 
 - 잘못된 `market`, `code`, `bas_dd` 형식은 400
 - proxy 서버에 `KRX_API_KEY` 가 없으면 503
-- upstream KRX 오류는 502
+- 검색 중 일부 시장 upstream 이 실패하면 200 이지만 `upstream.degraded=true` / `failed_markets` 가 함께 온다.
+- 모든 요청 시장에서 upstream KRX 조회가 실패하면 502
 - 기준일에 종목을 찾지 못하면 404 `not_found`
 
 ## 참고 링크

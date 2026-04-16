@@ -2061,7 +2061,9 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
       payload.upstream = result.upstream;
     }
 
-    cache.set(cacheKey, payload, config.cacheTtlMs);
+    if (!result.upstream?.degraded) {
+      cache.set(cacheKey, payload, config.cacheTtlMs);
+    }
     return payload;
   });
 

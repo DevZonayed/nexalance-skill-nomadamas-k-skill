@@ -186,7 +186,8 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/korean-stock/trade-info'
 
 - `q`, `market`, `code`, `bas_dd` 형식이 잘못되면 400 응답
 - 프록시 서버에 `KRX_API_KEY` 가 없으면 503 응답
-- upstream KRX 응답 오류면 502 응답
+- 검색 중 일부 시장 upstream 이 실패하면 200 응답이지만 `upstream.degraded=true` 와 `failed_markets` 를 함께 반환할 수 있다.
+- 모든 요청 시장에서 upstream KRX 조회가 실패하면 502 응답
 - 해당 기준일/시장에 종목이 없으면 404 `not_found`
 
 ## Done when

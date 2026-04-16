@@ -264,6 +264,109 @@ test("korean stock search surfaces degraded upstream metadata when another marke
   assert.ok(fetchCalls.every((entry) => entry.url.startsWith("https://data-dbg.krx.co.kr/")));
 });
 
+test("korean stock search does not cache degraded responses and retries a recovered market", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  let kosdaqAttempts = 0;
+
+  global.fetch = async (url, options = {}) => {
+    const text = String(url);
+    fetchCalls.push({ url: text, headers: options.headers });
+
+    if (text.includes("stk_isu_base_info") || text.includes("knx_isu_base_info")) {
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: []
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    if (text.includes("ksq_isu_base_info")) {
+      kosdaqAttempts += 1;
+
+      if (kosdaqAttempts === 1) {
+        return new Response("boom", {
+          status: 500,
+          statusText: "Internal Server Error"
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          OutBlock_1: [
+            {
+              ISU_CD: "KR7196170005",
+              ISU_SRT_CD: "196170",
+              ISU_NM: "알테오젠",
+              ISU_ABBRV: "알테오젠",
+              ISU_ENG_NM: "Alteogen",
+              LIST_DD: "20140509",
+              MKT_TP_NM: "KOSDAQ",
+              SECUGRP_NM: "주권",
+              SECT_TP_NM: "제약",
+              KIND_STKCERT_TP_NM: "보통주",
+              PARVAL: "500",
+              LIST_SHRS: "53470829"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    throw new Error(`unexpected URL: ${url}`);
+  };
+
+  const app = buildServer({
+    env: {
+      KRX_API_KEY: "krx-key",
+      KSKILL_PROXY_CACHE_TTL_MS: "60000"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%EC%95%8C%ED%85%8C%EC%98%A4%EC%A0%A0&bas_dd=20260408"
+  });
+  const second = await app.inject({
+    method: "GET",
+    url: "/v1/korean-stock/search?q=%EC%95%8C%ED%85%8C%EC%98%A4%EC%A0%A0&bas_dd=20260408"
+  });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json().items.length, 0);
+  assert.equal(first.json().proxy.cache.hit, false);
+  assert.equal(first.json().upstream.degraded, true);
+  assert.deepEqual(first.json().upstream.failed_markets, [
+    {
+      market: "KOSDAQ",
+      code: "upstream_error",
+      status_code: 502,
+      message: "KRX API HTTP 오류 (status: 500): Internal Server Error"
+    }
+  ]);
+
+  assert.equal(second.statusCode, 200);
+  assert.equal(second.json().proxy.cache.hit, false);
+  assert.equal(second.json().items.length, 1);
+  assert.equal(second.json().items[0].market, "KOSDAQ");
+  assert.equal(second.json().items[0].code, "196170");
+  assert.equal(kosdaqAttempts, 2);
+  assert.equal(fetchCalls.length, 4);
+});
+
 test("korean stock search reuses per-market base snapshots across different queries for the same date", async (t) => {
   const originalFetch = global.fetch;
   const fetchCalls = [];
