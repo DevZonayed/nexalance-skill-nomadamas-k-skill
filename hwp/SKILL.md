@@ -1,6 +1,6 @@
 ---
 name: hwp
-description: Convert HWP files to JSON, Markdown, or HTML, extract images, and choose between @ohah/hwpjs and hwp-mcp based on OS and local Hangul availability.
+description: Use kordoc for agent-native HWP/HWPX document parsing, JSON extraction, diffing, form filling, and Markdown→HWPX reverse conversion.
 license: MIT
 metadata:
   category: documents
@@ -12,171 +12,188 @@ metadata:
 
 ## What this skill does
 
-`.hwp` 문서를 읽어 JSON / Markdown / HTML로 변환하고, 이미지 추출이나 배치 처리를 수행한다.  
-환경이 **Windows + 한글(HWP) 프로그램 설치 + 직접 제어가 필요한 작업**이면 `hwp-mcp`를 선택하고, 그 외에는 기본값으로 `@ohah/hwpjs`를 사용한다.
+`kordoc`으로 `.hwp` / `.hwpx` / `.hwpml` 문서를 AI가 읽기 좋은 Markdown 또는 JSON으로 바꾸고,
+필요하면 문서 비교, 양식 자동 채우기, Markdown→HWPX 역변환까지 수행한다.
+
+이 스킬의 기본 엔진은 **항상 `kordoc`** 이다. 문서 변환, 비교, 양식 자동화, 역변환까지 같은 도구로 일관되게 처리한다.
 
 ## When to use
 
 - "이 HWP 파일을 Markdown으로 바꿔줘"
-- "한글 문서에서 이미지만 뽑아줘"
-- "폴더 안 HWP를 한 번에 JSON으로 변환해줘"
-- "윈도우에서 한글 프로그램을 직접 조작해서 표 채워줘"
+- "공문서를 JSON 구조로 뽑아서 AI가 읽게 해줘"
+- "두 버전 문서 차이점을 보고 싶어"
+- "신청서 HWPX 양식에 값을 채워줘"
+- "AI가 만든 Markdown을 다시 HWPX로 저장해줘"
+- "폴더 안 문서를 한 번에 변환해줘"
 
 ## When not to use
 
-- 원본이 `.hwpx`, `.docx`, `.pdf` 인 경우
-- Windows가 아니거나 한글 프로그램이 없는데 직접 편집 자동화를 요구하는 경우
-- OCR이나 스캔 PDF 복구가 필요한 경우
+- OCR이 필수인데 OCR provider 연결이 전혀 없는 이미지 기반 PDF만 있는 경우
+- `.docx`, `.xlsx`, `.pdf` 만 다루더라도 문서 파싱 자체가 아니라 편집기 GUI 자동화가 필요한 경우
+- 원본 프로그램의 실시간 UI 제어가 반드시 필요한 경우
 
 ## Prerequisites
 
-- 공통 변환 경로: Node.js 18+
-- 직접 제어 경로: Windows + 한글(HWP) 프로그램 설치 + Python 3.7+
+- Node.js 18+
 - 출력 경로 쓰기 권한
+- `kordoc` 설치 또는 `npx` 사용 가능 환경
+- PDF 파싱이 꼭 필요하면 선택적으로 `pdfjs-dist`
 
 ## Inputs
 
-- 원본 `.hwp` 파일 경로 또는 폴더 경로
-- 원하는 출력 형식: `json`, `markdown`, `html`
+- 원본 `.hwp`, `.hwpx`, `.hwpml` 파일 경로 또는 폴더/글롭 경로
+- 원하는 결과 형태: `markdown`, `json`, `hwpx`
 - 출력 파일/디렉터리 경로
-- 이미지 포함/추출 여부
-- 배치 처리 여부
-- 직접 제어가 필요한지 여부
+- 페이지 범위 지정 여부
+- 비교 / 양식 채우기 / 역변환 여부
+- 양식 채우기용 key-value 데이터 또는 JSON 파일
 
 ## Routing policy
 
-### Default: `@ohah/hwpjs`
+### Default: `kordoc`
 
-다음 조건 중 하나라도 맞으면 `@ohah/hwpjs`를 기본값으로 사용한다.
+다음 작업은 모두 기본적으로 `kordoc`으로 처리한다.
 
-- macOS / Linux / CI 환경
-- Windows여도 한글 프로그램 설치 여부를 확신할 수 없음
-- 읽기 / 변환 / 이미지 추출 / 배치 처리 중심 작업
+- HWP/HWPX/HWPML → Markdown
+- HWP/HWPX/HWPML → JSON (`blocks`, `metadata`)
+- 배치 변환
+- 페이지 범위 파싱
+- 이미지/표/양식이 포함된 공문서 구조 추출
+- Markdown→HWPX 역변환
+- HWPX 양식 자동 채우기
 
-### Windows direct-control path: `hwp-mcp`
+### Optional library path
 
-다음 조건을 모두 만족할 때만 `hwp-mcp`를 선택한다.
+CLI만으로 부족하면 Node API를 사용한다.
 
-- 운영체제가 Windows
-- 한글(HWP) 프로그램이 실제로 설치되어 있음
-- 문서 생성, 텍스트 삽입, 표 채우기, 저장 같은 **실행 중인 한글 프로그램 직접 제어**가 필요함
-
-직접 제어 조건이 불분명하면 추측하지 말고 `@ohah/hwpjs`로 처리 가능한 범위부터 진행한다.
+- `parse()` — Markdown + 구조화 블록
+- `compare()` — 신구 문서 비교
+- `fillForm()` — 양식 자동 채우기
+- `markdownToHwpx()` — Markdown→HWPX 역변환
 
 ## Workflow
 
-### 0. Detect the environment first
+### 1. Install `kordoc` when missing
+
+전역 설치가 필요하면:
 
 ```bash
-node -p "process.platform"
-```
-
-- 결과가 `win32`가 아니면 `@ohah/hwpjs`
-- 결과가 `win32`여도 한글 프로그램 직접 제어가 확인되지 않으면 `@ohah/hwpjs`
-- `win32` 이고 한글 프로그램이 실제로 설치되어 있으며 직접 조작이 필요하면 `hwp-mcp`
-
-### 1. Install the chosen backend when missing
-
-#### `@ohah/hwpjs`
-
-```bash
-npm install -g @ohah/hwpjs
+npm install -g kordoc
 export NODE_PATH="$(npm root -g)"
 ```
 
-#### `hwp-mcp`
+일회성 실행이면 `npx`를 우선 써도 된다.
+
+### 2. Convert a document to Markdown
 
 ```bash
-git clone https://github.com/jkf87/hwp-mcp.git
-cd hwp-mcp
-pip install -r requirements.txt
+npx kordoc 보고서.hwp -o 보고서.md
 ```
 
-`hwp-mcp`는 Windows와 한글 프로그램 설치가 전제다. 이 전제가 깨지면 억지로 진행하지 말고 `@ohah/hwpjs`로 되돌린다.
-
-### 2. Prefer `@ohah/hwpjs` for conversions and extraction
-
-#### JSON 변환
+여러 문서를 한 번에 처리하려면:
 
 ```bash
-hwpjs to-json document.hwp -o output.json --pretty
+npx kordoc ./문서함/* -d ./변환결과
 ```
 
-#### Markdown 변환
+특정 페이지 범위만 읽고 싶으면:
 
 ```bash
-hwpjs to-markdown document.hwp -o output.md --include-images
+npx kordoc 보고서.hwp --pages 1-3
 ```
 
-`--include-images` 는 이미지를 별도 파일로 떨구지 않고 Markdown 안에 base64 `data:` URI로 인라인한다.
-이미지를 파일로 따로 저장해야 하면 다음처럼 `--images-dir` 를 사용한다.
+### 3. Extract structured JSON for AI/automation
 
 ```bash
-hwpjs to-markdown document.hwp -o output.md --images-dir ./images
+npx kordoc 검토서.hwpx --format json > 검토서.json
 ```
 
-#### HTML 변환
+JSON 결과에서는 `success`, `markdown`, `blocks`, `metadata`를 우선 확인한다.
+표나 이미지가 중요하면 `blocks` 안의 `table`, `image` 타입을 확인한다.
+
+### 4. Fill HWPX forms
 
 ```bash
-hwpjs to-html document.hwp -o output.html
+npx kordoc fill 신청서.hwpx -f '성명=홍길동,주소=서울특별시 광진구 능동로 120' -o 신청서_작성완료.hwpx
 ```
 
-#### 이미지 추출
+값이 많으면 JSON 파일을 쓴다.
 
 ```bash
-hwpjs extract-images document.hwp -o ./images
+npx kordoc fill 신청서.hwpx -j values.json -o 신청서_작성완료.hwpx
 ```
 
-#### 배치 처리
+실제 쓰기 전에 어떤 필드가 잡히는지만 보고 싶으면:
 
 ```bash
-hwpjs batch ./documents -o ./output --format json --recursive
+npx kordoc fill 신청서.hwpx --dry-run
 ```
 
-배치 출력 형식은 로컬 설치 버전의 `hwpjs batch --help` 를 확인해 맞춘다.
+### 5. Reverse-convert Markdown back to HWPX
 
-### 3. Use `hwp-mcp` only for live HWP control on Windows
+```bash
+node --input-type=module - <<'EOF'
+import { markdownToHwpx } from "kordoc";
+import { writeFileSync } from "node:fs";
 
-Claude/Codex MCP 설정에 `hwp_mcp_stdio_server.py` 를 등록한 뒤 다음 종류의 작업에 사용한다.
+const hwpx = await markdownToHwpx("# 제목\n\n본문\n\n| 항목 | 값 |\n| --- | --- |\n| 성명 | 홍길동 |");
+writeFileSync("출력.hwpx", Buffer.from(hwpx));
+EOF
+```
 
-- 새 문서 생성
-- 텍스트 삽입
-- 표 생성 / 채우기
-- 저장
-- 여러 편집 명령을 묶은 배치 작업
+### 6. Compare two document versions when diff matters
 
-직접 제어 예시는 다음 범주에 한정한다.
+```bash
+node --input-type=module - <<'EOF'
+import { compare } from "kordoc";
+import { readFileSync } from "node:fs";
 
-- 보고서 템플릿 채우기
-- 표 데이터 입력
-- 정해진 서식 문서 생성
+const before = readFileSync("이전버전.hwp");
+const after = readFileSync("최신버전.hwpx");
+const diff = await compare(before, after);
+console.log(diff.stats);
+EOF
+```
 
-### 4. Verify outputs after every run
+### 7. Connect kordoc to agent-native MCP flows when needed
 
-- JSON: 파일 생성 여부와 최상위 구조 확인
-- Markdown: 본문 생성 여부와 `data:` URI / base64 이미지 인라인 포함 여부 확인 (`--include-images` 사용 시)
-- Markdown: 이미지 파일 분리가 목적이면 `--images-dir` 출력 디렉터리에 실제 파일이 생겼는지 확인
-- HTML: 파일 생성 후 브라우저 렌더링 가능 여부 확인
-- 이미지 추출: 출력 디렉터리에 파일이 실제로 생겼는지 확인
-- 배치 처리: 입력 개수와 출력 개수가 대략 맞는지 확인
+```json
+{
+  "mcpServers": {
+    "kordoc": {
+      "command": "npx",
+      "args": ["-y", "kordoc", "mcp"]
+    }
+  }
+}
+```
+
+## Verify outputs after every run
+
+- Markdown: 파일이 생성되었고 제목/본문/표 구조가 깨지지 않았는지 확인
+- JSON: `success: true` 와 `blocks` / `metadata` 존재 여부 확인
+- 배치 처리: 입력 수와 출력 수가 크게 어긋나지 않는지 확인
+- 양식 채우기: 채워진 결과 파일과 미매칭 필드 여부 확인
+- 역변환: 생성된 `.hwpx` 파일이 열리고 기본 서식/테이블 구조가 유지되는지 확인
+- 비교: `diff.stats` 에 added / removed / modified 값이 합리적인지 확인
 
 ## Done when
 
-- 요청한 형식의 결과물이 생성되어 있다
-- 이미지 요청이 있으면 추출 파일 또는 Markdown 안 `data:` URI 인라인 결과가 확인되어 있다
+- 요청한 Markdown / JSON / HWPX 결과물이 생성되어 있다
+- 공문서 표·이미지·메타데이터가 필요한 수준으로 확인되어 있다
+- 양식 채우기나 역변환 요청이 있었다면 결과 파일까지 검증되어 있다
 - 배치 요청이면 처리 범위와 실패 건수가 정리되어 있다
-- Windows 직접 제어 작업이면 어떤 조작을 수행했는지 남아 있다
 
 ## Failure modes
 
-- 손상된 `.hwp` 파일
-- 전역 `hwpjs` 미설치
-- Windows가 아니어서 `hwp-mcp`를 사용할 수 없음
-- 한글 프로그램 미설치 또는 자동화 연결 실패
+- 손상된 HWP/HWPX/HWPML 파일
+- 암호화/배포 제한 문서에서 일부 파싱 한계 발생
+- 이미지 기반 PDF인데 OCR provider가 없음
 - 출력 디렉터리 권한 부족
+- 양식 라벨이 템플릿 안에서 예상과 다르게 배치되어 일부 필드가 매칭되지 않음
 
 ## Notes
 
-- 기본 선택지는 언제나 `@ohah/hwpjs`다.
-- `hwp-mcp`는 Windows + 한글 설치 환경에서만 직접 제어용으로 사용한다.
-- 직접 제어가 실패해도 읽기/변환 작업으로 충분하면 `@ohah/hwpjs` 경로로 축소해 완료한다.
+- `kordoc`은 HWP/HWPX뿐 아니라 HWPML, PDF, XLSX, DOCX도 함께 다룬다.
+- 기본 목적은 **AI가 읽을 수 있는 Markdown/JSON 변환** 이다.
+- 공문서 자동화가 필요하면 `fillForm()` / `markdownToHwpx()` / MCP 경로를 우선 검토한다.

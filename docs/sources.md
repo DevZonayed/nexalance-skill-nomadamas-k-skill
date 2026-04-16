@@ -23,8 +23,7 @@
 - Riot LoL Esports live window feed: https://feed.lolesports.com/livestats/v1/window/<gameId>
 - Riot LoL Esports live details feed: https://feed.lolesports.com/livestats/v1/details/<gameId>
 - Oracle's Elixir data glossary: https://oracleselixir.com/tools/downloads
-- `@ohah/hwpjs`: https://github.com/ohah/hwpjs
-- `hwp-mcp`: https://github.com/jkf87/hwp-mcp
+- `kordoc`: https://github.com/chrisryugj/kordoc
 - korean-law-mcp: https://github.com/chrisryugj/korean-law-mcp
 - real-estate-mcp: https://github.com/tae0y/real-estate-mcp/tree/main
 - korea-stock-mcp: https://github.com/jjlabsio/korea-stock-mcp

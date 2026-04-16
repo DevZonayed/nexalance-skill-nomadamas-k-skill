@@ -2,104 +2,125 @@
 
 ## 이 기능으로 할 수 있는 일
 
-- `.hwp` 문서를 JSON, Markdown, HTML로 변환
-- 문서 안 이미지를 추출
-- 폴더 단위 배치 처리
-- Windows + 한글 프로그램 설치 환경에서는 직접 문서 조작까지 확장
+- `.hwp`, `.hwpx`, `.hwpml` 문서를 Markdown으로 변환
+- 문서를 JSON으로 구조화해 `blocks`, `metadata`까지 AI에 넘기기
+- 폴더 단위 배치 변환
+- 두 버전 문서 비교
+- HWPX 양식 자동 채우기
+- Markdown을 다시 HWPX로 역변환
 
 ## 먼저 필요한 것
 
-- 기본 경로: Node.js 18+
-- 기본 패키지: `npm install -g @ohah/hwpjs`
+- Node.js 18+
+- 기본 패키지: `npm install -g kordoc`
 - 실행 전: `export NODE_PATH="$(npm root -g)"`
-- 직접 제어가 필요할 때만: Windows + 한글(HWP) 프로그램 설치 + Python 3.7+
+- PDF까지 처리할 계획이면 선택적으로 `pdfjs-dist`
 
 ## 어떤 경로를 선택하나
 
-### 기본값: `@ohah/hwpjs`
+이 스킬의 기본 경로는 **항상 `kordoc`** 이다.
 
-다음 상황에서는 `@ohah/hwpjs`를 사용한다.
+- 문서 읽기/변환 → `kordoc`
+- 구조화 JSON 추출 → `kordoc --format json`
+- 양식 채우기 → `kordoc fill`
+- 역변환 → `markdownToHwpx()`
+- 에이전트 연동 → `npx kordoc mcp`
 
-- macOS / Linux / CI
-- 읽기, 변환, 이미지 추출, 배치 처리
-- Windows여도 한글 프로그램 설치/연동을 확신할 수 없음
-
-### 예외 경로: `hwp-mcp`
-
-다음 조건을 모두 만족할 때만 `hwp-mcp`를 사용한다.
-
-- Windows
-- 한글(HWP) 프로그램이 실제 설치되어 있음
-- 문서 생성, 텍스트 삽입, 표 채우기처럼 실행 중인 한글 직접 제어가 필요함
-
-즉, **변환은 `@ohah/hwpjs`, 직접 조작은 `hwp-mcp`** 가 기본 규칙이다.
+이 스킬은 단일한 `kordoc` 경로를 표준 흐름으로 유지한다.
 
 ## 기본 흐름
 
-1. `node -p "process.platform"` 으로 운영체제를 확인한다.
-2. `win32` 가 아니면 `@ohah/hwpjs`를 사용한다.
-3. `win32` 여도 직접 제어 요건이 분명하지 않으면 `@ohah/hwpjs`를 사용한다.
-4. 직접 조작이 필요하고 한글 설치가 확인되면 `hwp-mcp`를 선택한다.
-5. 결과 파일 생성 여부와 출력 내용을 확인한다.
+1. `kordoc`이 없으면 설치한다.
+2. `.hwp`/`.hwpx`/`.hwpml`을 Markdown 또는 JSON으로 변환한다.
+3. 표·이미지·메타데이터가 필요하면 JSON의 `blocks` / `metadata`를 확인한다.
+4. 양식 자동 채우기나 역변환이 필요하면 `fill` / `markdownToHwpx` 경로로 이어간다.
+5. 결과 파일 생성 여부와 구조를 확인한다.
 
 ## 예시
+
+### Markdown 변환
+
+```bash
+npx kordoc 보고서.hwp -o 보고서.md
+```
 
 ### JSON 변환
 
 ```bash
-hwpjs to-json document.hwp -o output.json --pretty
-```
-
-### Markdown 변환 + 이미지 포함
-
-```bash
-hwpjs to-markdown document.hwp -o output.md --include-images
-```
-
-`--include-images` 는 이미지 파일 경로를 따로 만드는 대신 Markdown 안에 base64 `data:` URI로 포함한다.
-
-### HTML 변환
-
-```bash
-hwpjs to-html document.hwp -o output.html
-```
-
-### 이미지 추출
-
-```bash
-hwpjs extract-images document.hwp -o ./images
+npx kordoc 검토서.hwpx --format json > 검토서.json
 ```
 
 ### 배치 처리
 
 ```bash
-hwpjs batch ./documents -o ./output --format json --recursive
+npx kordoc ./문서함/* -d ./변환결과
+```
+
+### 페이지 범위 지정
+
+```bash
+npx kordoc 보고서.hwp --pages 1-3
+```
+
+### 양식 자동 채우기
+
+```bash
+npx kordoc fill 신청서.hwpx -f '성명=홍길동,주소=서울특별시 광진구 능동로 120' -o 신청서_작성완료.hwpx
+```
+
+### Markdown → HWPX 역변환
+
+```bash
+node --input-type=module - <<'EOF'
+import { markdownToHwpx } from "kordoc";
+import { writeFileSync } from "node:fs";
+
+const hwpx = await markdownToHwpx("# 제목\n\n본문\n\n| 항목 | 값 |\n| --- | --- |\n| 성명 | 홍길동 |");
+writeFileSync("출력.hwpx", Buffer.from(hwpx));
+EOF
+```
+
+### 문서 비교
+
+```bash
+node --input-type=module - <<'EOF'
+import { compare } from "kordoc";
+import { readFileSync } from "node:fs";
+
+const before = readFileSync("이전버전.hwp");
+const after = readFileSync("최신버전.hwpx");
+const diff = await compare(before, after);
+console.log(diff.stats);
+EOF
 ```
 
 ## 결과 확인 포인트
 
-- JSON 출력: 파일 생성 여부와 최상위 구조를 확인한다.
-- Markdown 출력: `--include-images` 를 썼다면 이미지 파일 경로가 따로 생기지 않아도 정상이며, Markdown 안 `data:` URI / base64 인라인 포함 여부를 확인한다.
-- HTML 출력: 파일 생성 뒤 브라우저에서 열리는지 확인한다.
-- 이미지 추출: 출력 디렉터리에 실제 이미지 파일이 생겼는지 확인한다.
+- Markdown 출력: 제목/본문/표가 기대한 순서로 정리됐는지 확인한다.
+- JSON 출력: `success`, `blocks`, `metadata`가 있는지 확인한다.
+- 이미지/표 구조: `blocks` 안 `image`, `table` 타입이 필요한 만큼 잡혔는지 확인한다.
 - 배치 처리: 입력 개수와 출력 개수가 크게 어긋나지 않는지 확인한다.
+- 양식 자동 채우기: 결과 `.hwpx` 파일이 생성되고 미매칭 필드가 과도하지 않은지 확인한다.
+- 역변환: 생성된 `.hwpx` 가 열리고 기본 서식/테이블이 유지되는지 확인한다.
 
-이미지를 별도 파일로 떨궈야 한다면 `--include-images` 대신 `--images-dir` 경로를 쓴다.
+## 에이전트/MCP 연동
 
-## 직접 제어가 필요한 경우
-
-`hwp-mcp`는 Windows + 한글 프로그램 설치 환경에서만 고려한다.
-
-```bash
-git clone https://github.com/jkf87/hwp-mcp.git
-cd hwp-mcp
-pip install -r requirements.txt
+```json
+{
+  "mcpServers": {
+    "kordoc": {
+      "command": "npx",
+      "args": ["-y", "kordoc", "mcp"]
+    }
+  }
+}
 ```
 
-그 뒤 MCP 서버로 연결해 새 문서 생성, 텍스트 삽입, 표 작성, 저장 같은 작업을 수행한다.
+이 경로를 쓰면 Claude/Codex/Cursor 같은 에이전트가 문서를 직접 읽고 처리 흐름에 연결할 수 있다.
 
 ## 주의할 점
 
-- `hwp-mcp`를 Linux/macOS에서 우회 실행하려 하지 않는다.
-- 직접 제어 필요성이 약하면 `@ohah/hwpjs`로 바로 끝내는 편이 더 안정적이다.
-- 배치 작업 후에는 입력 개수와 출력 개수를 같이 확인한다.
+- 손상된 문서나 일부 특수 양식은 경고가 섞일 수 있다.
+- 이미지 기반 PDF는 OCR provider가 없으면 품질이 제한될 수 있다.
+- 양식 채우기는 템플릿 라벨 품질에 따라 일부 필드가 매칭되지 않을 수 있다.
+- 공문서 자동화 목적이면 Markdown만 보는 것보다 JSON `blocks`를 같이 확인하는 편이 안전하다.

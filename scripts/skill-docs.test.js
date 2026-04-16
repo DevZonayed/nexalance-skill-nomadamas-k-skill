@@ -152,7 +152,7 @@ test("README advertises OpenClaw among the supported coding agents", () => {
   );
 });
 
-test("hwp skill documents environment-aware routing and supported operations", () => {
+test("hwp skill documents kordoc-based parsing and supported operations", () => {
   const skillPath = path.join(repoRoot, "hwp", "SKILL.md");
 
   assert.ok(fs.existsSync(skillPath), "expected hwp/SKILL.md to exist");
@@ -160,25 +160,30 @@ test("hwp skill documents environment-aware routing and supported operations", (
   const skill = read(path.join("hwp", "SKILL.md"));
 
   assert.match(skill, /^name: hwp$/m);
-  assert.match(skill, /@ohah\/hwpjs/);
-  assert.match(skill, /\bhwp-mcp\b/);
-  assert.match(skill, /Windows/i);
+  assert.match(skill, /\bkordoc\b/);
+  assert.doesNotMatch(skill, /@ohah\/hwpjs/);
+  assert.doesNotMatch(skill, /\bhwp-mcp\b/);
   assert.match(skill, /JSON/i);
   assert.match(skill, /Markdown/i);
-  assert.match(skill, /HTML/i);
   assert.match(skill, /image/i);
-  assert.match(skill, /batch/i);
+  assert.match(skill, /(batch|배치)/i);
+  assert.match(skill, /HWPX/i);
+  assert.match(skill, /(역변환|되돌려)/);
+  assert.match(skill, /(비교|compare)/i);
 });
 
-test("hwp skill documents inline image verification for markdown output", () => {
+test("hwp skill documents kordoc commands for markdown output and reverse conversion", () => {
   const skill = read(path.join("hwp", "SKILL.md"));
   const featureDoc = read(path.join("docs", "features", "hwp.md"));
+  const sources = read(path.join("docs", "sources.md"));
 
-  assert.match(skill, /hwpjs to-markdown document\.hwp -o output\.md --include-images/);
-  assert.match(skill, /Markdown:.*(data:|base64)/);
-  assert.match(skill, /--images-dir/);
-  assert.doesNotMatch(skill, /Markdown:.*이미지 경로 생성 여부 확인/);
-  assert.match(featureDoc, /--images-dir/);
+  assert.match(skill, /npx kordoc .* -o .*\.md/);
+  assert.match(skill, /markdownToHwpx/);
+  assert.match(skill, /(fillForm|fill)/);
+  assert.match(featureDoc, /npx kordoc .* --format json/);
+  assert.match(featureDoc, /markdownToHwpx/);
+  assert.match(featureDoc, /(양식 자동 채우기|fill)/);
+  assert.match(sources, /kordoc/);
 });
 
 test("repository docs advertise the hwp skill", () => {
@@ -191,10 +196,11 @@ test("repository docs advertise the hwp skill", () => {
   assert.match(readme, /\| HWP 문서 처리 \|/);
   assert.match(readme, /\[HWP 문서 처리\]\(docs\/features\/hwp\.md\)/);
   assert.match(install, /--skill hwp/);
-  assert.match(featureDoc, /--include-images/);
-  assert.match(featureDoc, /(data:|base64)/);
-  assert.match(featureDoc, /Markdown 출력.*(data:|base64)/);
-  assert.doesNotMatch(featureDoc, /Markdown 출력.*이미지 (파일 )?경로 생성 여부 확인/);
+  assert.match(featureDoc, /\bkordoc\b/);
+  assert.doesNotMatch(featureDoc, /@ohah\/hwpjs/);
+  assert.doesNotMatch(featureDoc, /\bhwp-mcp\b/);
+  assert.match(install, /npm install -g kordoc /);
+  assert.doesNotMatch(install, /@ohah\/hwpjs/);
 });
 
 test("repository docs advertise the kakaotalk-mac skill", () => {
@@ -221,7 +227,7 @@ test("repository docs advertise the used-car-price-search skill", () => {
   assert.match(install, /--skill used-car-price-search/);
   assert.match(
     install,
-    /npm install -g @ohah\/hwpjs kbo-game kleague-results lck-analytics toss-securities hipass-receipt k-lotto coupang-product-search used-car-price-search cheap-gas-nearby korean-law-mcp/,
+    /npm install -g kordoc kbo-game kleague-results lck-analytics toss-securities hipass-receipt k-lotto coupang-product-search used-car-price-search cheap-gas-nearby korean-law-mcp/,
   );
 });
 
