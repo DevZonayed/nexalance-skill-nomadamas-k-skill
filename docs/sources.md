@@ -24,6 +24,7 @@
 - Riot LoL Esports live details feed: https://feed.lolesports.com/livestats/v1/details/<gameId>
 - Oracle's Elixir data glossary: https://oracleselixir.com/tools/downloads
 - `kordoc`: https://github.com/chrisryugj/kordoc
+- `pdfjs-dist`: https://www.npmjs.com/package/pdfjs-dist
 - korean-law-mcp: https://github.com/chrisryugj/korean-law-mcp
 - real-estate-mcp: https://github.com/tae0y/real-estate-mcp/tree/main
 - korea-stock-mcp: https://github.com/jjlabsio/korea-stock-mcp

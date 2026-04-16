@@ -5,16 +5,17 @@
 - `.hwp`, `.hwpx`, `.hwpml` 문서를 Markdown으로 변환
 - 문서를 JSON으로 구조화해 `blocks`, `metadata`까지 AI에 넘기기
 - 폴더 단위 배치 변환
+- `watch`로 폴더를 감시하며 새 문서를 계속 변환
 - 두 버전 문서 비교
-- HWPX 양식 자동 채우기
+- HWPX 양식 필드 추출
 - Markdown을 다시 HWPX로 역변환
 
 ## 먼저 필요한 것
 
 - Node.js 18+
-- 기본 패키지: `npm install -g kordoc`
+- 기본 패키지: `npm install -g kordoc pdfjs-dist`
 - 실행 전: `export NODE_PATH="$(npm root -g)"`
-- PDF까지 처리할 계획이면 선택적으로 `pdfjs-dist`
+- 현재 배포된 `kordoc` CLI는 시작 시 `pdfjs-dist`를 바로 불러오므로 PDF를 안 다뤄도 함께 설치해야 한다
 
 ## 어떤 경로를 선택하나
 
@@ -22,9 +23,10 @@
 
 - 문서 읽기/변환 → `kordoc`
 - 구조화 JSON 추출 → `kordoc --format json`
-- 양식 채우기 → `kordoc fill`
+- 연속 입력 폴더 처리 → `kordoc watch`
+- 양식 필드 추출 → `parse()` + `extractFormFields()`
 - 역변환 → `markdownToHwpx()`
-- 에이전트 연동 → `npx kordoc mcp`
+- 문서 비교 → `compare()`
 
 이 스킬은 단일한 `kordoc` 경로를 표준 흐름으로 유지한다.
 
@@ -33,7 +35,7 @@
 1. `kordoc`이 없으면 설치한다.
 2. `.hwp`/`.hwpx`/`.hwpml`을 Markdown 또는 JSON으로 변환한다.
 3. 표·이미지·메타데이터가 필요하면 JSON의 `blocks` / `metadata`를 확인한다.
-4. 양식 자동 채우기나 역변환이 필요하면 `fill` / `markdownToHwpx` 경로로 이어간다.
+4. 반복 입력 폴더는 `watch`, 양식 문서는 `extractFormFields`, 편집 roundtrip은 `markdownToHwpx` 경로로 이어간다.
 5. 결과 파일 생성 여부와 구조를 확인한다.
 
 ## 예시
@@ -62,10 +64,26 @@ npx kordoc ./문서함/* -d ./변환결과
 npx kordoc 보고서.hwp --pages 1-3
 ```
 
-### 양식 자동 채우기
+### 디렉터리 감시 변환
 
 ```bash
-npx kordoc fill 신청서.hwpx -f '성명=홍길동,주소=서울특별시 광진구 능동로 120' -o 신청서_작성완료.hwpx
+npx kordoc watch ./문서함
+```
+
+### 양식 필드 추출
+
+```bash
+node --input-type=module - <<'EOF'
+import { parse, extractFormFields } from "kordoc";
+
+const result = await parse("신청서.hwpx");
+if (!result.success) {
+  console.error(result.error);
+  process.exit(1);
+}
+
+console.log(JSON.stringify(extractFormFields(result.blocks), null, 2));
+EOF
 ```
 
 ### Markdown → HWPX 역변환
@@ -100,27 +118,14 @@ EOF
 - JSON 출력: `success`, `blocks`, `metadata`가 있는지 확인한다.
 - 이미지/표 구조: `blocks` 안 `image`, `table` 타입이 필요한 만큼 잡혔는지 확인한다.
 - 배치 처리: 입력 개수와 출력 개수가 크게 어긋나지 않는지 확인한다.
-- 양식 자동 채우기: 결과 `.hwpx` 파일이 생성되고 미매칭 필드가 과도하지 않은지 확인한다.
+- 양식 필드 추출: `extractFormFields(result.blocks)` 결과가 비어 있지 않은지 확인한다.
 - 역변환: 생성된 `.hwpx` 가 열리고 기본 서식/테이블이 유지되는지 확인한다.
-
-## 에이전트/MCP 연동
-
-```json
-{
-  "mcpServers": {
-    "kordoc": {
-      "command": "npx",
-      "args": ["-y", "kordoc", "mcp"]
-    }
-  }
-}
-```
-
-이 경로를 쓰면 Claude/Codex/Cursor 같은 에이전트가 문서를 직접 읽고 처리 흐름에 연결할 수 있다.
+- 문서 비교: `diff.stats` 의 added / removed / modified 값이 입력 변화와 맞는지 확인한다.
 
 ## 주의할 점
 
 - 손상된 문서나 일부 특수 양식은 경고가 섞일 수 있다.
 - 이미지 기반 PDF는 OCR provider가 없으면 품질이 제한될 수 있다.
-- 양식 채우기는 템플릿 라벨 품질에 따라 일부 필드가 매칭되지 않을 수 있다.
+- 양식 필드 추출은 템플릿 라벨 품질에 따라 일부 필드가 인식되지 않을 수 있다.
 - 공문서 자동화 목적이면 Markdown만 보는 것보다 JSON `blocks`를 같이 확인하는 편이 안전하다.
+- 현재 배포본 기준으로 문서화된 CLI 명령은 기본 변환과 `watch` 이며, 양식 처리와 비교는 Node API 예시를 기준으로 잡는 편이 안전하다.

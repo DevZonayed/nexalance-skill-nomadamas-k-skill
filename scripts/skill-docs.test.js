@@ -170,20 +170,37 @@ test("hwp skill documents kordoc-based parsing and supported operations", () => 
   assert.match(skill, /HWPX/i);
   assert.match(skill, /(역변환|되돌려)/);
   assert.match(skill, /(비교|compare)/i);
+  assert.match(skill, /pdfjs-dist/);
+  assert.match(skill, /(extractFormFields|양식 필드)/);
+  assert.doesNotMatch(skill, /fillForm/);
+  assert.doesNotMatch(skill, /kordoc fill/);
+  assert.doesNotMatch(skill, /kordoc mcp/);
 });
 
-test("hwp skill documents kordoc commands for markdown output and reverse conversion", () => {
+test("hwp docs match the published kordoc install and runtime contract", () => {
   const skill = read(path.join("hwp", "SKILL.md"));
   const featureDoc = read(path.join("docs", "features", "hwp.md"));
+  const install = read(path.join("docs", "install.md"));
+  const readme = read("README.md");
   const sources = read(path.join("docs", "sources.md"));
 
   assert.match(skill, /npx kordoc .* -o .*\.md/);
   assert.match(skill, /markdownToHwpx/);
-  assert.match(skill, /(fillForm|fill)/);
+  assert.match(skill, /extractFormFields/);
   assert.match(featureDoc, /npx kordoc .* --format json/);
   assert.match(featureDoc, /markdownToHwpx/);
-  assert.match(featureDoc, /(양식 자동 채우기|fill)/);
+  assert.match(featureDoc, /(extractFormFields|양식 필드)/);
+  assert.match(featureDoc, /kordoc watch/);
+  assert.match(featureDoc, /npm install -g kordoc pdfjs-dist/);
+  assert.doesNotMatch(featureDoc, /선택적으로 `pdfjs-dist`/);
+  assert.doesNotMatch(featureDoc, /kordoc fill/);
+  assert.doesNotMatch(featureDoc, /kordoc mcp/);
+  assert.doesNotMatch(featureDoc, /fillForm/);
+  assert.match(install, /npm install -g kordoc pdfjs-dist /);
+  assert.match(readme, /\| HWP 문서 처리 \| .*양식 필드 추출.*Markdown→HWPX 역변환/);
+  assert.doesNotMatch(readme, /\| HWP 문서 처리 \| .*양식 채우기/);
   assert.match(sources, /kordoc/);
+  assert.match(sources, /pdfjs-dist/);
 });
 
 test("repository docs advertise the hwp skill", () => {
@@ -227,7 +244,7 @@ test("repository docs advertise the used-car-price-search skill", () => {
   assert.match(install, /--skill used-car-price-search/);
   assert.match(
     install,
-    /npm install -g kordoc kbo-game kleague-results lck-analytics toss-securities hipass-receipt k-lotto coupang-product-search used-car-price-search cheap-gas-nearby korean-law-mcp/,
+    /npm install -g kordoc pdfjs-dist kbo-game kleague-results lck-analytics toss-securities hipass-receipt k-lotto coupang-product-search used-car-price-search cheap-gas-nearby korean-law-mcp/,
   );
 });
 
