@@ -13,9 +13,11 @@
 ## 먼저 필요한 것
 
 - Node.js 18+
-- 기본 패키지: `npm install -g kordoc pdfjs-dist`
-- 실행 전: `export NODE_PATH="$(npm root -g)"`
+- CLI를 한 번만 쓸 때: `npx --yes --package kordoc --package pdfjs-dist kordoc --help`
+- 반복 실행용 전역 설치: `npm install -g kordoc pdfjs-dist`
+- Node API 예시를 따라갈 로컬 작업 디렉터리: `npm init -y && npm install kordoc pdfjs-dist`
 - 현재 배포된 `kordoc` CLI는 시작 시 `pdfjs-dist`를 바로 불러오므로 PDF를 안 다뤄도 함께 설치해야 한다
+- `import { markdownToHwpx } from "kordoc"` 같은 ESM 예시는 전역 `NODE_PATH`가 아니라 로컬 설치 기준으로 실행해야 한다
 
 ## 어떤 경로를 선택하나
 
@@ -43,34 +45,43 @@
 ### Markdown 변환
 
 ```bash
-npx kordoc 보고서.hwp -o 보고서.md
+npx --yes --package kordoc --package pdfjs-dist kordoc 보고서.hwp -o 보고서.md
 ```
 
 ### JSON 변환
 
 ```bash
-npx kordoc 검토서.hwpx --format json > 검토서.json
+npx --yes --package kordoc --package pdfjs-dist kordoc 검토서.hwpx --format json > 검토서.json
 ```
 
 ### 배치 처리
 
 ```bash
-npx kordoc ./문서함/* -d ./변환결과
+npx --yes --package kordoc --package pdfjs-dist kordoc ./문서함/* -d ./변환결과
 ```
 
 ### 페이지 범위 지정
 
 ```bash
-npx kordoc 보고서.hwp --pages 1-3
+npx --yes --package kordoc --package pdfjs-dist kordoc 보고서.hwp --pages 1-3
 ```
 
 ### 디렉터리 감시 변환
 
 ```bash
-npx kordoc watch ./문서함
+npx --yes --package kordoc --package pdfjs-dist kordoc watch ./문서함
 ```
 
 ### 양식 필드 추출
+
+아래 Node API 예시는 `package.json`이 있는 로컬 작업 디렉터리에서:
+
+```bash
+npm init -y
+npm install kordoc pdfjs-dist
+```
+
+이미 `package.json`이 있으면 `npm install kordoc pdfjs-dist`만 추가로 실행하면 된다.
 
 ```bash
 node --input-type=module - <<'EOF'

@@ -259,6 +259,9 @@ npm install -g kordoc pdfjs-dist kbo-game kleague-results lck-analytics toss-sec
 export NODE_PATH="$(npm root -g)"
 ```
 
+HWP Node API 예시는 전역 `NODE_PATH` 대신 로컬 프로젝트에 `npm install kordoc pdfjs-dist` 후 실행한다.
+`kordoc` CLI를 일회성으로만 쓸 때는 `npx --yes --package kordoc --package pdfjs-dist kordoc ...` 형태를 사용한다.
+
 ### macOS 바이너리
 
 카카오톡 Mac CLI는 npm 패키지가 아니라 Homebrew tap 설치를 사용한다.

@@ -36,7 +36,7 @@ metadata:
 
 - Node.js 18+
 - 출력 경로 쓰기 권한
-- `kordoc`과 `pdfjs-dist`를 같은 전역/로컬 환경에 설치했거나, 둘 다 포함된 `npx` 실행 환경
+- `kordoc`과 `pdfjs-dist`를 같은 전역/로컬 환경에 설치했거나, 둘 다 포함된 `npx --yes --package kordoc --package pdfjs-dist kordoc ...` 실행 환경
 - 현재 배포된 `kordoc` CLI는 시작 시 `pdfjs-dist`를 바로 로드하므로 PDF를 안 써도 함께 설치해야 한다
 
 ## Inputs
@@ -73,46 +73,64 @@ CLI만으로 부족하면 Node API를 사용한다.
 
 ## Workflow
 
-### 1. Install `kordoc` with `pdfjs-dist`
+### 1. Prepare the CLI runtime
 
-전역 설치가 필요하면:
+일회성 변환이면 둘 다 포함한 `npx` 형태를 바로 쓴다.
+
+```bash
+npx --yes --package kordoc --package pdfjs-dist kordoc --help
+```
+
+반복 실행용 전역 설치가 필요하면:
 
 ```bash
 npm install -g kordoc pdfjs-dist
-export NODE_PATH="$(npm root -g)"
 ```
 
 현재 배포된 `kordoc` CLI는 `pdfjs-dist`가 없으면 `kordoc --help` 단계부터 실패하므로
 깨끗한 환경에서는 두 패키지를 같이 설치한 뒤 실행한다.
 
-### 2. Convert a document to Markdown
+### 2. Prepare a local project for Node API examples
+
+`parse()`, `compare()`, `extractFormFields()`, `markdownToHwpx()` 같은 ESM 예시는
+전역 `NODE_PATH`가 아니라 **로컬 프로젝트 설치** 기준으로 실행한다.
 
 ```bash
-npx kordoc 보고서.hwp -o 보고서.md
+mkdir -p ./kordoc-local && cd ./kordoc-local
+npm init -y
+npm install kordoc pdfjs-dist
+```
+
+이미 `package.json`이 있는 작업 디렉터리라면 `npm install kordoc pdfjs-dist`만 추가로 실행하면 된다.
+
+### 3. Convert a document to Markdown
+
+```bash
+npx --yes --package kordoc --package pdfjs-dist kordoc 보고서.hwp -o 보고서.md
 ```
 
 여러 문서를 한 번에 처리하려면:
 
 ```bash
-npx kordoc ./문서함/* -d ./변환결과
+npx --yes --package kordoc --package pdfjs-dist kordoc ./문서함/* -d ./변환결과
 ```
 
 특정 페이지 범위만 읽고 싶으면:
 
 ```bash
-npx kordoc 보고서.hwp --pages 1-3
+npx --yes --package kordoc --package pdfjs-dist kordoc 보고서.hwp --pages 1-3
 ```
 
-### 3. Extract structured JSON for AI/automation
+### 4. Extract structured JSON for AI/automation
 
 ```bash
-npx kordoc 검토서.hwpx --format json > 검토서.json
+npx --yes --package kordoc --package pdfjs-dist kordoc 검토서.hwpx --format json > 검토서.json
 ```
 
 JSON 결과에서는 `success`, `markdown`, `blocks`, `metadata`를 우선 확인한다.
 표나 이미지가 중요하면 `blocks` 안의 `table`, `image` 타입을 확인한다.
 
-### 4. Inspect HWPX form fields from parsed blocks
+### 5. Inspect HWPX form fields from parsed blocks
 
 ```bash
 node --input-type=module - <<'EOF'
@@ -132,10 +150,10 @@ EOF
 자동 변환이 계속 들어오는 폴더면 CLI의 `watch` 명령을 쓴다.
 
 ```bash
-npx kordoc watch ./문서함
+npx --yes --package kordoc --package pdfjs-dist kordoc watch ./문서함
 ```
 
-### 5. Reverse-convert Markdown back to HWPX
+### 6. Reverse-convert Markdown back to HWPX
 
 ```bash
 node --input-type=module - <<'EOF'
@@ -147,7 +165,7 @@ writeFileSync("출력.hwpx", Buffer.from(hwpx));
 EOF
 ```
 
-### 6. Compare two document versions when diff matters
+### 7. Compare two document versions when diff matters
 
 ```bash
 node --input-type=module - <<'EOF'
