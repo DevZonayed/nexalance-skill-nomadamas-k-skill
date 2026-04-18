@@ -1175,6 +1175,9 @@ test("coupang-product-search skill and docs use retention-corp coupang_partners 
     assert.match(doc, /retention-corp\/coupang_partners/);
     assert.match(doc, /local:\/\/coupang-mcp/);
     assert.match(doc, /coupang_partners_mcp\.py/);
+    assert.match(doc, /--repo-dir/);
+    assert.match(doc, /--no-clone/);
+    assert.match(doc, /--update/);
     assert.match(doc, /search_coupang_products/);
     assert.match(doc, /로켓배송/);
     assert.doesNotMatch(doc, /yuju777-coupang-mcp\.hf\.space\/mcp/);

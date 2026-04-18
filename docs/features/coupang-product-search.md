@@ -63,10 +63,16 @@ python3 coupang-product-search/scripts/coupang_partners_mcp.py \
   --no-clone \
   tools
 
-# 3. 상품 검색
+# 3. 기존 checkout을 fast-forward로 최신화한 뒤 계약 확인
+python3 coupang-product-search/scripts/coupang_partners_mcp.py \
+  --repo-dir ~/.cache/k-skill/coupang_partners \
+  --update \
+  tools
+
+# 4. 상품 검색
 python3 coupang-product-search/scripts/coupang_partners_mcp.py search "생수"
 
-# 4. 로켓배송 필터
+# 5. 로켓배송 필터
 python3 coupang-product-search/scripts/coupang_partners_mcp.py rocket "에어팟"
 ```
 
