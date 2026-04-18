@@ -46,7 +46,7 @@ local://coupang-mcp
 ## 기본 흐름
 
 1. 검색어를 받는다. 너무 넓으면 용도/예산/브랜드를 먼저 물어본다.
-2. `tools` 명령으로 retention-corp/coupang_partners 로컬 MCP 도구 목록을 확인한다.
+2. `tools`와 `init` 명령으로 retention-corp/coupang_partners 로컬 MCP 도구 목록과 handshake payload를 확인한다.
 3. 요청에 맞는 CLI 명령을 실행한다.
 4. `data.result`를 읽고 로켓배송/일반배송을 구분하여 정리한다.
 5. 상위 3~5개 추천과 함께 가격/배송 정보, 변동 가능성을 제공한다.
@@ -56,12 +56,17 @@ local://coupang-mcp
 ```bash
 # 1. 최초 실행: upstream checkout을 자동 clone하고 도구 목록 확인
 python3 coupang-product-search/scripts/coupang_partners_mcp.py tools
+python3 coupang-product-search/scripts/coupang_partners_mcp.py init
 
 # 2. 이미 clone된 upstream을 명시해서 네트워크 없이 계약 확인
 python3 coupang-product-search/scripts/coupang_partners_mcp.py \
   --repo-dir ~/.cache/k-skill/coupang_partners \
   --no-clone \
   tools
+python3 coupang-product-search/scripts/coupang_partners_mcp.py \
+  --repo-dir ~/.cache/k-skill/coupang_partners \
+  --no-clone \
+  init
 
 # 3. 기존 checkout을 fast-forward로 최신화한 뒤 계약 확인
 python3 coupang-product-search/scripts/coupang_partners_mcp.py \

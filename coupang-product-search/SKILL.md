@@ -78,6 +78,7 @@ local://coupang-mcp
 
 ```bash
 python3 coupang-product-search/scripts/coupang_partners_mcp.py tools
+python3 coupang-product-search/scripts/coupang_partners_mcp.py init
 ```
 
 기존 checkout을 명시하거나 CI/검증에서 네트워크 clone을 막으려면:
@@ -87,6 +88,10 @@ python3 coupang-product-search/scripts/coupang_partners_mcp.py \
   --repo-dir /path/to/coupang_partners \
   --no-clone \
   tools
+python3 coupang-product-search/scripts/coupang_partners_mcp.py \
+  --repo-dir /path/to/coupang_partners \
+  --no-clone \
+  init
 ```
 
 ### 3. Call tools
@@ -172,7 +177,7 @@ upstream CLI는 JSON을 출력한다. `data.result` 안의 상품 배열 또는 
 
 ## Done when
 
-- `tools` 또는 실제 명령으로 retention-corp/coupang_partners 로컬 MCP 계약을 확인했다.
+- `tools`와 `init` 또는 실제 명령으로 retention-corp/coupang_partners 로컬 MCP 계약을 확인했다.
 - 검색 결과가 로켓배송/일반배송으로 구분되어 정리되었다.
 - 사용자 니즈에 맞는 추천 TOP 3이 제시되었다.
 - 가격/배송 정보와 변동 가능성 안내가 포함되었다.
