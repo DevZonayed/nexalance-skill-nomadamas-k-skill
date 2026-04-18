@@ -181,6 +181,22 @@ class CoupangPartnersMcpWrapperTests(unittest.TestCase):
             self.assertIn("retention-corp/coupang_partners", completed.stderr)
             self.assertIn("git clone", completed.stderr)
 
+    def test_missing_command_guidance_includes_contract_init_command(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(WRAPPER_PATH),
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("tools", completed.stderr)
+        self.assertIn("init", completed.stderr)
+        self.assertIn("search <keyword>", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

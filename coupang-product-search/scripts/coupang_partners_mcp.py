@@ -30,6 +30,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Run the retention-corp/coupang_partners local Coupang MCP-compatible CLI.",
         epilog=(
             "Examples: coupang_partners_mcp.py tools | "
+            "coupang_partners_mcp.py init | "
             "coupang_partners_mcp.py search 생수 | "
             "coupang_partners_mcp.py budget 키보드 --max-price 100000"
         ),
@@ -58,7 +59,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.upstream_args and args.upstream_args[0] == "--":
         args.upstream_args = args.upstream_args[1:]
     if not args.upstream_args:
-        parser.error("missing upstream command; try: tools, search <keyword>, rocket <keyword>, budget <keyword>")
+        parser.error("missing upstream command; try: tools, init, search <keyword>, rocket <keyword>, budget <keyword>")
     return args
 
 
