@@ -3276,3 +3276,132 @@ test("data4library book-exists endpoint requires library code and isbn13 then pr
     isbn13: "9780804429573"
   });
 });
+
+test("parking lot search endpoint normalizes, caches, and keeps the proxy public", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    const resolved = String(url);
+    fetchCalls.push(resolved);
+    assert.match(resolved, /^http:\/\/api\.data\.go\.kr\/openapi\/tn_pubr_prkplce_info_api\?/);
+    const urlObject = new URL(resolved);
+    assert.equal(urlObject.searchParams.get("serviceKey"), "data-key");
+    assert.equal(urlObject.searchParams.get("type"), "json");
+    assert.equal(urlObject.searchParams.get("prkplceSe"), "공영");
+    assert.equal(urlObject.searchParams.get("rdnmadr"), "서울특별시 종로구");
+
+    return new Response(JSON.stringify({
+      response: {
+        header: { resultCode: "00", resultMsg: "NORMAL_SERVICE" },
+        body: {
+          pageNo: 1,
+          numOfRows: 1000,
+          totalCount: 2,
+          items: [
+            {
+              prkplceNo: "111-2-000001",
+              prkplceNm: "종로구청 공영주차장",
+              prkplceSe: "공영",
+              prkplceType: "노외",
+              rdnmadr: "서울특별시 종로구 삼봉로 43",
+              prkcmprt: "50",
+              parkingchrgeInfo: "유료",
+              basicTime: "30",
+              basicCharge: "1000",
+              institutionNm: "서울특별시 종로구청",
+              latitude: "37.57320",
+              longitude: "126.97810",
+              pwdbsPpkZoneYn: "Y",
+              referenceDate: "2026-03-01"
+            },
+            {
+              prkplceNo: "111-2-000003",
+              prkplceNm: "광화문광장 공영주차장",
+              prkplceSe: "공영",
+              prkplceType: "노상",
+              rdnmadr: "서울특별시 종로구 세종대로 172",
+              prkcmprt: "20",
+              parkingchrgeInfo: "무료",
+              latitude: "37.57375",
+              longitude: "126.97836",
+              pwdbsPpkZoneYn: "N",
+              referenceDate: "2026-03-01"
+            }
+          ]
+        }
+      }
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json;charset=UTF-8" }
+    });
+  };
+
+  const app = buildServer({
+    env: {
+      DATA_GO_KR_API_KEY: "data-key",
+      KSKILL_PROXY_CACHE_TTL_MS: "60000"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "GET",
+    url: "/v1/parking-lots/search?latitude=37.57371315593711&longitude=126.97833785777944&address_hint=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C%20%EC%A2%85%EB%A1%9C%EA%B5%AC&limit=2&radius=1000"
+  });
+  const second = await app.inject({
+    method: "GET",
+    url: "/v1/parking-lots/search?lat=37.57371315593711&lon=126.97833785777944&addressHint=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C%20%EC%A2%85%EB%A1%9C%EA%B5%AC&limit=2&radius=1000"
+  });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(first.json().items[0].name, "광화문광장 공영주차장");
+  assert.equal(first.json().items[0].feeInfo, "무료");
+  assert.equal(first.json().items[1].basicCharge, 1000);
+  assert.equal(first.json().query.address_hint, "서울특별시 종로구");
+  assert.equal(first.json().proxy.cache.hit, false);
+  assert.equal(second.json().proxy.cache.hit, true);
+});
+
+test("parking lot search endpoint validates coordinates before upstream calls", async (t) => {
+  const app = buildServer({
+    env: {
+      DATA_GO_KR_API_KEY: "data-key"
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/parking-lots/search?latitude=oops&longitude=126.9"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "bad_request");
+  assert.match(response.json().message, /latitude and longitude/);
+});
+
+test("parking lot search endpoint reports missing Data.go.kr key", async (t) => {
+  const app = buildServer();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/parking-lots/search?latitude=37.57371315593711&longitude=126.97833785777944"
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error, "upstream_not_configured");
+  assert.match(response.json().message, /DATA_GO_KR_API_KEY/);
+});

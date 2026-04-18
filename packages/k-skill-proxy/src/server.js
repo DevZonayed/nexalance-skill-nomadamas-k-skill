@@ -15,6 +15,7 @@ const {
 } = require("./mfds");
 const { fetchTransactions, VALID_ASSET_TYPES, VALID_DEAL_TYPES } = require("./molit");
 const { fetchNaverShoppingSearch, normalizeNaverShoppingSearchQuery } = require("./naver-shopping");
+const { fetchNearbyParkingLots } = require("./parking-lots");
 const { searchRegionCode } = require("./region-lookup");
 const { resolveEducationOfficeFromNaturalLanguage } = require("./neis-office-codes");
 const AIR_KOREA_UPSTREAM_BASE_URL = "http://apis.data.go.kr";
@@ -677,6 +678,57 @@ function normalizeRealEstateQuery(query) {
   }
 
   return { lawdCd, dealYmd, numOfRows };
+}
+
+function normalizeParkingLotSearchQuery(query) {
+  const latitude = parseFloatValue(query.latitude ?? query.lat);
+  const longitude = parseFloatValue(query.longitude ?? query.lon ?? query.lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error("Provide latitude and longitude.");
+  }
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new Error("Provide valid latitude and longitude.");
+  }
+
+  const limit = parseInteger(query.limit, 5);
+  if (limit < 1 || limit > 50) {
+    throw new Error("limit must be between 1 and 50.");
+  }
+
+  const radius = parseInteger(query.radius ?? query.max_distance_meters ?? query.maxDistanceMeters, 2000);
+  if (radius < 1 || radius > 50000) {
+    throw new Error("radius must be between 1 and 50000.");
+  }
+
+  const numOfRows = parseInteger(query.numOfRows ?? query.num_of_rows, 1000);
+  if (numOfRows < 1 || numOfRows > 1000) {
+    throw new Error("numOfRows must be between 1 and 1000.");
+  }
+
+  const maxPages = parseInteger(query.maxPages ?? query.max_pages, 1);
+  if (maxPages < 1 || maxPages > 10) {
+    throw new Error("maxPages must be between 1 and 10.");
+  }
+
+  const publicOnlyRaw = trimOrNull(query.publicOnly ?? query.public_only);
+  const publicOnly = publicOnlyRaw
+    ? !["0", "false", "n", "no"].includes(publicOnlyRaw.toLowerCase())
+    : true;
+  const addressHint = trimOrNull(query.addressHint ?? query.address_hint);
+  const parkingType = trimOrNull(query.parkingType ?? query.parking_type);
+
+  return {
+    latitude,
+    longitude,
+    limit,
+    radius,
+    numOfRows,
+    maxPages,
+    publicOnly,
+    addressHint,
+    parkingType
+  };
 }
 
 function normalizeRegionCodeQuery(query) {
@@ -1809,6 +1861,101 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         deal_type: dealType,
         lawd_cd: normalized.lawdCd,
         deal_ymd: normalized.dealYmd
+      },
+      proxy: {
+        name: config.proxyName,
+        cache: {
+          hit: false,
+          ttl_ms: config.cacheTtlMs
+        },
+        requested_at: new Date().toISOString()
+      }
+    };
+
+    cache.set(cacheKey, payload, config.cacheTtlMs);
+    return payload;
+  });
+
+  app.get("/v1/parking-lots/search", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeParkingLotSearchQuery(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({
+      route: "parking-lot-search",
+      ...normalized
+    });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return {
+        ...cached,
+        proxy: {
+          ...cached.proxy,
+          cache: {
+            hit: true,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    if (!config.molitApiKey) {
+      reply.code(503);
+      return {
+        error: "upstream_not_configured",
+        message: "DATA_GO_KR_API_KEY is not configured on the proxy server.",
+        proxy: {
+          name: config.proxyName,
+          cache: {
+            hit: false,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    let result;
+    try {
+      result = await fetchNearbyParkingLots({
+        ...normalized,
+        serviceKey: config.molitApiKey
+      });
+    } catch (error) {
+      reply.code(error.statusCode && error.statusCode >= 400 ? error.statusCode : 502);
+      return {
+        error: error.upstreamCode ? "upstream_error" : "proxy_error",
+        message: error.message,
+        upstream_code: error.upstreamCode || undefined,
+        proxy: {
+          name: config.proxyName,
+          cache: {
+            hit: false,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    const payload = {
+      ...result,
+      query: {
+        latitude: normalized.latitude,
+        longitude: normalized.longitude,
+        limit: normalized.limit,
+        radius: normalized.radius,
+        public_only: normalized.publicOnly,
+        address_hint: normalized.addressHint,
+        parking_type: normalized.parkingType,
+        num_of_rows: normalized.numOfRows,
+        max_pages: normalized.maxPages
       },
       proxy: {
         name: config.proxyName,
@@ -3032,6 +3179,7 @@ module.exports = {
   normalizeNeisSchoolMealQuery,
   normalizeNeisSchoolSearchQuery,
   normalizeNaverShoppingSearchQuery,
+  normalizeParkingLotSearchQuery,
   normalizeRealEstateQuery,
   normalizeRegionCodeQuery,
   normalizeSeoulSubwayQuery,
