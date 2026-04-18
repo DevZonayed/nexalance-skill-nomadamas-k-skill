@@ -2645,3 +2645,37 @@ test("hola-poke-yeoksam docs pin the verified remote MCP contract snapshot and p
   assert.equal(fixture.enter_event_invalid_phone.error, "phone_format");
   assert.match(fixture.enter_event_invalid_phone.message, /01012345678|010-1234-5678/);
 });
+
+test("repository docs advertise the library-book-search skill", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const proxyDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
+  const featureDocPath = path.join(repoRoot, "docs", "features", "library-book-search.md");
+  const skillPath = path.join(repoRoot, "library-book-search", "SKILL.md");
+
+  assert.ok(fs.existsSync(featureDocPath), "expected docs/features/library-book-search.md to exist");
+  assert.ok(fs.existsSync(skillPath), "expected library-book-search/SKILL.md to exist");
+
+  const featureDoc = read(path.join("docs", "features", "library-book-search.md"));
+  const skill = read(path.join("library-book-search", "SKILL.md"));
+
+  assert.match(skill, /^name: library-book-search$/m);
+  assert.match(readme, /\| 도서관 도서 조회 \|/);
+  assert.match(readme, /\[도서관 도서 조회 가이드\]\(docs\/features\/library-book-search\.md\)/);
+  assert.match(install, /--skill library-book-search/);
+  assert.match(install, /DATA4LIBRARY_AUTH_KEY/);
+  assert.match(sources, /data4library\.kr\/apiUtilization/);
+  assert.match(proxyDoc, /\/v1\/data4library\/book-search/);
+  assert.match(proxyDoc, /DATA4LIBRARY_AUTH_KEY/);
+
+  for (const doc of [skill, featureDoc]) {
+    assert.match(doc, /도서관 정보나루/);
+    assert.match(doc, /\/v1\/data4library\/book-search/);
+    assert.match(doc, /\/v1\/data4library\/book-detail/);
+    assert.match(doc, /\/v1\/data4library\/book-exists/);
+    assert.match(doc, /\/v1\/data4library\/libraries-by-book/);
+    assert.match(doc, /DATA4LIBRARY_AUTH_KEY.*프록시 서버/s);
+    assert.match(doc, /사용자.*시크릿.*없/);
+  }
+});

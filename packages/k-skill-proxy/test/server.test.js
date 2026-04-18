@@ -3,7 +3,13 @@ const assert = require("node:assert/strict");
 
 const {
   buildServer,
+  normalizeData4LibraryBookDetailQuery,
+  normalizeData4LibraryBookExistsQuery,
+  normalizeData4LibraryBookSearchQuery,
+  normalizeData4LibraryLibrariesByBookQuery,
+  normalizeData4LibraryLibrarySearchQuery,
   proxyAirKoreaRequest,
+  proxyData4LibraryRequest,
   proxyHrfcoWaterLevelRequest,
   proxyKmaWeatherRequest,
   proxySeoulSubwayRequest
@@ -35,6 +41,7 @@ test("health endpoint stays public and reports auth/upstream status", async (t) 
   assert.equal(body.upstreams.krxConfigured, false);
   assert.equal(body.upstreams.seoulOpenApiConfigured, false);
   assert.equal(body.upstreams.hrfcoConfigured, false);
+  assert.equal(body.upstreams.data4libraryConfigured, false);
 });
 
 test("health endpoint reports KRX upstream status when configured", async (t) => {
@@ -2868,4 +2875,404 @@ test("mfds product-report endpoint uses live key with server-side filter", async
   assert.ok(fetchCalls.some((entry) => entry.includes("PRDLST_NM=")));
   assert.ok(fetchCalls.some((entry) => entry.includes("RAWMTRL_NM=")));
   assert.ok(!response.json().warnings || !response.json().warnings.some((w) => /sample feed/.test(w)));
+});
+
+test("data4library book-search normalizes query aliases and bounds pagination", () => {
+  const normalized = normalizeData4LibraryBookSearchQuery({
+    q: "  역사  ",
+    page: "2",
+    limit: "250"
+  });
+
+  assert.deepEqual(normalized, {
+    keyword: "역사",
+    pageNo: 2,
+    pageSize: 100
+  });
+
+  assert.throws(
+    () => normalizeData4LibraryBookSearchQuery({ pageNo: "1" }),
+    /Provide keyword/
+  );
+});
+
+test("data4library remaining query normalizers preserve narrow aliases", () => {
+  assert.deepEqual(
+    normalizeData4LibraryBookDetailQuery({
+      isbn: "978-8971998557",
+      loanInfo: "y"
+    }),
+    {
+      isbn13: "9788971998557",
+      loaninfoYN: "Y"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryBookDetailQuery({
+      isbn: "0-306-40615-2"
+    }),
+    {
+      isbn13: "0306406152",
+      loaninfoYN: "N"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryBookExistsQuery({
+      libraryCode: "111001",
+      isbn13: "0-306-40615-2"
+    }),
+    {
+      libCode: "111001",
+      isbn13: "9780306406157"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryBookExistsQuery({
+      libraryCode: "111001",
+      isbn13: "0-8044-2957-X"
+    }),
+    {
+      libCode: "111001",
+      isbn13: "9780804429573"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryLibrariesByBookQuery({
+      isbn13: "9788971998557",
+      region: "11",
+      detailRegion: "11010",
+      page: "2",
+      limit: "250"
+    }),
+    {
+      isbn: "9788971998557",
+      region: "11",
+      pageNo: 2,
+      pageSize: 100,
+      dtl_region: "11010"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryLibrarySearchQuery({
+      libraryCode: "111001",
+      region: "11",
+      detailRegion: "11010",
+      page: "3",
+      limit: "20"
+    }),
+    {
+      pageNo: 3,
+      pageSize: 20,
+      libCode: "111001",
+      region: "11",
+      dtl_region: "11010"
+    }
+  );
+
+  assert.throws(
+    () => normalizeData4LibraryBookDetailQuery({ isbn13: "9788971998557", loanInfo: "maybe" }),
+    /loaninfoYN must be Y or N/
+  );
+  assert.throws(
+    () => normalizeData4LibraryBookExistsQuery({ libraryCode: "lib-1", isbn13: "9788971998557" }),
+    /Provide valid libraryCode/
+  );
+  assert.throws(
+    () => normalizeData4LibraryBookExistsQuery({ libraryCode: "111001", isbn13: "0-306-40615-3" }),
+    /Provide valid isbn13/
+  );
+  assert.throws(
+    () => normalizeData4LibraryLibrariesByBookQuery({ isbn13: "9788971998557" }),
+    /Provide region/
+  );
+  assert.throws(
+    () => normalizeData4LibraryLibrarySearchQuery({ detailRegion: "seoul" }),
+    /Provide valid dtl_region/
+  );
+});
+
+test("data4library proxy helper injects authKey and strips caller auth overrides", async () => {
+  const fetchCalls = [];
+  const upstream = await proxyData4LibraryRequest({
+    operation: "srchBooks",
+    params: {
+      keyword: "역사",
+      pageNo: 1,
+      pageSize: 10,
+      authKey: "caller-key",
+      format: "xml"
+    },
+    authKey: "server-key",
+    fetchImpl: async (url) => {
+      fetchCalls.push(String(url));
+      return new Response(JSON.stringify({ response: { resultNum: 0, docs: [] } }), {
+        status: 200,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      });
+    }
+  });
+
+  assert.equal(upstream.statusCode, 200);
+  assert.equal(fetchCalls.length, 1);
+  const url = new URL(fetchCalls[0]);
+  assert.equal(url.origin + url.pathname, "https://data4library.kr/api/srchBooks");
+  assert.equal(url.searchParams.get("authKey"), "server-key");
+  assert.equal(url.searchParams.get("keyword"), "역사");
+  assert.equal(url.searchParams.get("format"), "json");
+});
+
+test("data4library book-search endpoint reports 503 without DATA4LIBRARY_AUTH_KEY", async (t) => {
+  const app = buildServer();
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-search?keyword=%EC%97%AD%EC%82%AC"
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error, "upstream_not_configured");
+});
+
+test("data4library book-search endpoint proxies JSON and caches normalized query aliases", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    const text = String(url);
+    fetchCalls.push(text);
+
+    if (text.startsWith("https://data4library.kr/api/srchBooks")) {
+      return new Response(
+        JSON.stringify({
+          response: {
+            resultNum: 1,
+            docs: [
+              {
+                doc: {
+                  bookname: "역사의 역사",
+                  authors: "유시민",
+                  publisher: "돌베개",
+                  publication_year: "2018",
+                  isbn13: "9788971998557"
+                }
+              }
+            ]
+          }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json;charset=UTF-8" }
+        }
+      );
+    }
+
+    throw new Error(`unexpected URL: ${url}`);
+  };
+
+  const app = buildServer({
+    env: {
+      DATA4LIBRARY_AUTH_KEY: "server-key",
+      KSKILL_PROXY_CACHE_TTL_MS: "60000"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-search?q=%20%EC%97%AD%EC%82%AC%20&page=1&limit=10&authKey=caller-key"
+  });
+  const second = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-search?keyword=%EC%97%AD%EC%82%AC&pageNo=1&pageSize=10"
+  });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(first.json().proxy.cache.hit, false);
+  assert.equal(second.json().proxy.cache.hit, true);
+  assert.equal(first.json().query.keyword, "역사");
+
+  const upstream = new URL(fetchCalls[0]);
+  assert.equal(upstream.searchParams.get("authKey"), "server-key");
+  assert.equal(upstream.searchParams.get("format"), "json");
+  assert.equal(upstream.searchParams.get("authKey") === "caller-key", false);
+});
+
+test("data4library detail, libraries-by-book, and library-search endpoints proxy expected operations", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    const text = String(url);
+    fetchCalls.push(text);
+    return new Response(
+      JSON.stringify({
+        response: {
+          echoedPath: new URL(text).pathname
+        }
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      }
+    );
+  };
+
+  const app = buildServer({
+    env: {
+      DATA4LIBRARY_AUTH_KEY: "server-key"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const detail = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-detail?isbn=978-8971998557&loanInfo=y&authKey=caller-key&format=xml"
+  });
+  const librariesByBook = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/libraries-by-book?isbn13=9788971998557&region=11&detailRegion=11010&page=2&limit=20"
+  });
+  const librarySearch = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/library-search?libraryCode=111001&region=11&detailRegion=11010&page=3&pageSize=30"
+  });
+
+  assert.equal(detail.statusCode, 200);
+  assert.equal(librariesByBook.statusCode, 200);
+  assert.equal(librarySearch.statusCode, 200);
+  assert.equal(fetchCalls.length, 3);
+
+  const [detailUrl, librariesByBookUrl, librarySearchUrl] = fetchCalls.map((entry) => new URL(entry));
+  assert.equal(detailUrl.origin + detailUrl.pathname, "https://data4library.kr/api/srchDtlList");
+  assert.equal(detailUrl.searchParams.get("isbn13"), "9788971998557");
+  assert.equal(detailUrl.searchParams.get("loaninfoYN"), "Y");
+
+  assert.equal(librariesByBookUrl.origin + librariesByBookUrl.pathname, "https://data4library.kr/api/libSrchByBook");
+  assert.equal(librariesByBookUrl.searchParams.get("isbn"), "9788971998557");
+  assert.equal(librariesByBookUrl.searchParams.get("region"), "11");
+  assert.equal(librariesByBookUrl.searchParams.get("dtl_region"), "11010");
+  assert.equal(librariesByBookUrl.searchParams.get("pageNo"), "2");
+  assert.equal(librariesByBookUrl.searchParams.get("pageSize"), "20");
+
+  assert.equal(librarySearchUrl.origin + librarySearchUrl.pathname, "https://data4library.kr/api/libSrch");
+  assert.equal(librarySearchUrl.searchParams.get("libCode"), "111001");
+  assert.equal(librarySearchUrl.searchParams.get("region"), "11");
+  assert.equal(librarySearchUrl.searchParams.get("dtl_region"), "11010");
+  assert.equal(librarySearchUrl.searchParams.get("pageNo"), "3");
+  assert.equal(librarySearchUrl.searchParams.get("pageSize"), "30");
+
+  for (const upstream of [detailUrl, librariesByBookUrl, librarySearchUrl]) {
+    assert.equal(upstream.searchParams.get("authKey"), "server-key");
+    assert.equal(upstream.searchParams.get("format"), "json");
+  }
+
+  assert.deepEqual(detail.json().query, {
+    isbn13: "9788971998557",
+    loaninfoYN: "Y"
+  });
+  assert.deepEqual(librariesByBook.json().query, {
+    isbn: "9788971998557",
+    region: "11",
+    pageNo: 2,
+    pageSize: 20,
+    dtl_region: "11010"
+  });
+  assert.deepEqual(librarySearch.json().query, {
+    pageNo: 3,
+    pageSize: 30,
+    libCode: "111001",
+    region: "11",
+    dtl_region: "11010"
+  });
+});
+
+test("data4library book-exists endpoint requires library code and isbn13 then proxies", async (t) => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url) => {
+    fetchCalls.push(String(url));
+    return new Response(JSON.stringify({ response: { result: { hasBook: "Y", loanAvailable: "N" } } }), {
+      status: 200,
+      headers: { "content-type": "application/json;charset=UTF-8" }
+    });
+  };
+
+  const app = buildServer({
+    env: {
+      DATA4LIBRARY_AUTH_KEY: "server-key"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const bad = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=abc"
+  });
+  const invalidIsbn10 = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=0-306-40615-3"
+  });
+  const ok = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=9788971998557"
+  });
+  const isbn10 = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=0-306-40615-2"
+  });
+  const isbn10X = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=0-8044-2957-X"
+  });
+
+  assert.equal(bad.statusCode, 400);
+  assert.equal(invalidIsbn10.statusCode, 400);
+  assert.equal(invalidIsbn10.json().error, "bad_request");
+  assert.equal(ok.statusCode, 200);
+  assert.equal(isbn10.statusCode, 200);
+  assert.equal(isbn10X.statusCode, 200);
+  assert.equal(fetchCalls.length, 3);
+  const upstream = new URL(fetchCalls[0]);
+  assert.equal(upstream.origin + upstream.pathname, "https://data4library.kr/api/bookExist");
+  assert.equal(upstream.searchParams.get("libCode"), "111001");
+  assert.equal(upstream.searchParams.get("isbn13"), "9788971998557");
+
+  const isbn10Upstream = new URL(fetchCalls[1]);
+  assert.equal(isbn10Upstream.origin + isbn10Upstream.pathname, "https://data4library.kr/api/bookExist");
+  assert.equal(isbn10Upstream.searchParams.get("libCode"), "111001");
+  assert.equal(isbn10Upstream.searchParams.get("isbn13"), "9780306406157");
+  assert.deepEqual(isbn10.json().query, {
+    library_code: "111001",
+    isbn13: "9780306406157"
+  });
+
+  const isbn10XUpstream = new URL(fetchCalls[2]);
+  assert.equal(isbn10XUpstream.origin + isbn10XUpstream.pathname, "https://data4library.kr/api/bookExist");
+  assert.equal(isbn10XUpstream.searchParams.get("libCode"), "111001");
+  assert.equal(isbn10XUpstream.searchParams.get("isbn13"), "9780804429573");
+  assert.deepEqual(isbn10X.json().query, {
+    library_code: "111001",
+    isbn13: "9780804429573"
+  });
 });
