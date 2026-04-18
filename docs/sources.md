@@ -138,3 +138,9 @@
 
 - Naver Shopping public BFF JSON: `https://ns-portal.shopping.naver.com/api/v2/shopping-paged-slot?query=<검색어>&source=shp_gui` (네이버 쇼핑 가격비교 스킬의 no-key fallback)
 - Naver Developers Search API shopping docs: https://developers.naver.com/docs/serviceapi/search/shopping/shopping.md
+
+- 도서관 정보나루 Open API 활용방법: https://www.data4library.kr/apiUtilization
+- 도서관 정보나루 도서 검색 endpoint: https://data4library.kr/api/srchBooks
+- 도서관 정보나루 도서 상세 endpoint: https://data4library.kr/api/srchDtlList
+- 도서관 정보나루 도서 소장 도서관 endpoint: https://data4library.kr/api/libSrchByBook
+- 도서관 정보나루 도서관별 도서 소장여부 endpoint: https://data4library.kr/api/bookExist
