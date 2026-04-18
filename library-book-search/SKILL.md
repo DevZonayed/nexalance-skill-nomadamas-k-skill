@@ -138,7 +138,7 @@ curl -fsS --get "${BASE}/v1/data4library/library-search" \
 
 - 프록시에 `DATA4LIBRARY_AUTH_KEY` 미설정 → `503` / `upstream_not_configured`
 - 키워드·ISBN·지역코드·도서관 코드 누락 → `400` / `bad_request`
-- ISBN 자리수 오류 → 10자리 또는 13자리 숫자로 다시 요청
+- ISBN 자리수 오류 → 하이픈을 제외한 ISBN-10(마지막 X 허용) 또는 ISBN-13으로 다시 요청
 - 도서관 코드/지역코드 불명확 — 사용자에게 후보를 보여 주고 선택 받기
 - Data4Library API 일시 장애·호출 제한·데이터 미수집
 

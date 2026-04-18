@@ -2909,6 +2909,38 @@ test("data4library remaining query normalizers preserve narrow aliases", () => {
   );
 
   assert.deepEqual(
+    normalizeData4LibraryBookDetailQuery({
+      isbn: "0-306-40615-2"
+    }),
+    {
+      isbn13: "0306406152",
+      loaninfoYN: "N"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryBookExistsQuery({
+      libraryCode: "111001",
+      isbn13: "0-306-40615-2"
+    }),
+    {
+      libCode: "111001",
+      isbn13: "9780306406157"
+    }
+  );
+
+  assert.deepEqual(
+    normalizeData4LibraryBookExistsQuery({
+      libraryCode: "111001",
+      isbn13: "0-8044-2957-X"
+    }),
+    {
+      libCode: "111001",
+      isbn13: "9780804429573"
+    }
+  );
+
+  assert.deepEqual(
     normalizeData4LibraryLibrariesByBookQuery({
       isbn13: "9788971998557",
       region: "11",
@@ -2949,6 +2981,10 @@ test("data4library remaining query normalizers preserve narrow aliases", () => {
   assert.throws(
     () => normalizeData4LibraryBookExistsQuery({ libraryCode: "lib-1", isbn13: "9788971998557" }),
     /Provide valid libraryCode/
+  );
+  assert.throws(
+    () => normalizeData4LibraryBookExistsQuery({ libraryCode: "111001", isbn13: "0-306-40615-3" }),
+    /Provide valid isbn13/
   );
   assert.throws(
     () => normalizeData4LibraryLibrariesByBookQuery({ isbn13: "9788971998557" }),
@@ -3193,15 +3229,50 @@ test("data4library book-exists endpoint requires library code and isbn13 then pr
     method: "GET",
     url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=abc"
   });
+  const invalidIsbn10 = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=0-306-40615-3"
+  });
   const ok = await app.inject({
     method: "GET",
     url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=9788971998557"
   });
+  const isbn10 = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=0-306-40615-2"
+  });
+  const isbn10X = await app.inject({
+    method: "GET",
+    url: "/v1/data4library/book-exists?libraryCode=111001&isbn13=0-8044-2957-X"
+  });
 
   assert.equal(bad.statusCode, 400);
+  assert.equal(invalidIsbn10.statusCode, 400);
+  assert.equal(invalidIsbn10.json().error, "bad_request");
   assert.equal(ok.statusCode, 200);
+  assert.equal(isbn10.statusCode, 200);
+  assert.equal(isbn10X.statusCode, 200);
+  assert.equal(fetchCalls.length, 3);
   const upstream = new URL(fetchCalls[0]);
   assert.equal(upstream.origin + upstream.pathname, "https://data4library.kr/api/bookExist");
   assert.equal(upstream.searchParams.get("libCode"), "111001");
   assert.equal(upstream.searchParams.get("isbn13"), "9788971998557");
+
+  const isbn10Upstream = new URL(fetchCalls[1]);
+  assert.equal(isbn10Upstream.origin + isbn10Upstream.pathname, "https://data4library.kr/api/bookExist");
+  assert.equal(isbn10Upstream.searchParams.get("libCode"), "111001");
+  assert.equal(isbn10Upstream.searchParams.get("isbn13"), "9780306406157");
+  assert.deepEqual(isbn10.json().query, {
+    library_code: "111001",
+    isbn13: "9780306406157"
+  });
+
+  const isbn10XUpstream = new URL(fetchCalls[2]);
+  assert.equal(isbn10XUpstream.origin + isbn10XUpstream.pathname, "https://data4library.kr/api/bookExist");
+  assert.equal(isbn10XUpstream.searchParams.get("libCode"), "111001");
+  assert.equal(isbn10XUpstream.searchParams.get("isbn13"), "9780804429573");
+  assert.deepEqual(isbn10X.json().query, {
+    library_code: "111001",
+    isbn13: "9780804429573"
+  });
 });

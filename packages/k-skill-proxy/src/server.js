@@ -266,11 +266,42 @@ function normalizeData4LibraryIsbn(value, label = "isbn13") {
     throw new Error(`Provide ${label}.`);
   }
 
-  const digits = normalized.replace(/-/g, "");
-  if (!/^\d{10}$|^\d{13}$/.test(digits)) {
+  const compact = normalized.replace(/-/g, "").toUpperCase();
+  if (!/^(?:\d{9}[\dX]|\d{13})$/.test(compact)) {
     throw new Error(`Provide valid ${label} (10 or 13 digits).`);
   }
-  return digits;
+  return compact;
+}
+
+function parseData4LibraryIsbn10CheckValue(character) {
+  return character === "X" ? 10 : Number.parseInt(character, 10);
+}
+
+function isValidData4LibraryIsbn10(isbn10) {
+  const sum = [...isbn10].reduce((total, digit, index) => (
+    total + parseData4LibraryIsbn10CheckValue(digit) * (10 - index)
+  ), 0);
+  return sum % 11 === 0;
+}
+
+function convertData4LibraryIsbn10ToIsbn13(isbn10) {
+  const body = `978${isbn10.slice(0, 9)}`;
+  const sum = [...body].reduce((total, digit, index) => (
+    total + Number.parseInt(digit, 10) * (index % 2 === 0 ? 1 : 3)
+  ), 0);
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return `${body}${checkDigit}`;
+}
+
+function normalizeData4LibraryIsbn13(value, label = "isbn13") {
+  const isbn = normalizeData4LibraryIsbn(value, label);
+  if (isbn.length === 13) {
+    return isbn;
+  }
+  if (!isValidData4LibraryIsbn10(isbn)) {
+    throw new Error(`Provide valid ${label} (10 or 13 digits).`);
+  }
+  return convertData4LibraryIsbn10ToIsbn13(isbn);
 }
 
 function normalizeData4LibraryPage(query) {
@@ -328,7 +359,7 @@ function normalizeData4LibraryBookExistsQuery(query) {
 
   return {
     libCode,
-    isbn13: normalizeData4LibraryIsbn(query.isbn13 ?? query.isbn, "isbn13")
+    isbn13: normalizeData4LibraryIsbn13(query.isbn13 ?? query.isbn, "isbn13")
   };
 }
 

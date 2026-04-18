@@ -110,7 +110,7 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/data4library/library-sea
 ## 실패/주의 사항
 
 - `DATA4LIBRARY_AUTH_KEY`가 프록시 서버에 없으면 `503 upstream_not_configured`가 반환된다.
-- ISBN은 하이픈을 제거했을 때 10자리 또는 13자리 숫자여야 한다.
+- ISBN은 하이픈을 제거했을 때 ISBN-10(마지막 X 허용) 또는 ISBN-13이어야 한다.
 - Data4Library 데이터와 개별 도서관 대출 상태는 동기화 지연이 있을 수 있다. 방문 전 도서관 홈페이지나 전화로 최종 확인을 권한다.
 - 지역코드·도서관 코드가 불명확하면 임의로 고르지 말고 후보를 제시한다.
 
