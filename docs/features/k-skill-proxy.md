@@ -25,6 +25,7 @@ client/skill -> k-skill-proxy -> upstream public API
 - `GET /v1/korean-stock/search`
 - `GET /v1/korean-stock/base-info`
 - `GET /v1/korean-stock/trade-info`
+- `GET /v1/naver-shopping/search` (네이버 검색 Open API 쇼핑 검색 우선, 키가 없으면 공개 BFF JSON 기반 상품/가격 후보 조회)
 - `GET /v1/opinet/around`
 - `GET /v1/opinet/detail`
 - `GET /v1/neis/school-search` (나이스 학교기본정보, `KEDU_INFO_KEY`)
@@ -48,6 +49,7 @@ client/skill -> k-skill-proxy -> upstream public API
 - `FOODSAFETYKOREA_API_KEY=...` (선택: 식품안전나라 회수 live 결과, 없으면 sample fallback)
 - `KEDU_INFO_KEY=...` (나이스 교육정보 개방 포털 Open API 인증키)
 - `KRX_API_KEY=...`
+- `NAVER_SEARCH_CLIENT_ID=...`, `NAVER_SEARCH_CLIENT_SECRET=...` (선택: 네이버 검색 Open API 쇼핑 검색)
 - `KSKILL_PROXY_PORT=4020`
 
 ## 프로덕션 배포 구조
@@ -184,6 +186,21 @@ curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/mfds/food-safety/search'
   --data-urlencode 'query=김밥' \
   --data-urlencode 'limit=5'
 ```
+
+
+네이버 쇼핑 가격비교 endpoint (`NAVER_SEARCH_CLIENT_ID`/`NAVER_SEARCH_CLIENT_SECRET`이 있으면 공식 Search API 우선):
+
+```bash
+curl -fsS --get 'https://k-skill-proxy.nomadamas.org/v1/naver-shopping/search' \
+  --data-urlencode 'q=에어팟 프로 2세대' \
+  --data-urlencode 'limit=10'
+```
+
+키가 없는 no-key fallback은 `search.shopping.naver.com/search/all` HTML 페이지 대신
+`ns-portal.shopping.naver.com/api/v2/shopping-paged-slot?query=<검색어>&source=shp_gui`
+공개 JSON path를 사용한다. `page`는 BFF에 전달한 뒤 해당 페이지 카드만 정규화하고, no-key
+`price_asc`/`price_dsc`/`review` 정렬은 선택된 BFF 페이지 안에서 로컬 적용한다. BFF에는 날짜
+필드가 없어 no-key `date` 요청은 `meta.sort_applied: "unsupported"`로 표시한다.
 
 한국 주식 검색 endpoint:
 
