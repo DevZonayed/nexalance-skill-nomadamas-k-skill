@@ -10,6 +10,7 @@
 - `GET /v1/seoul-subway/arrival`
 - `GET /v1/han-river/water-level`
 - `GET /v1/household-waste/info` — 생활쓰레기 배출정보(`DATA_GO_KR_API_KEY`; `pageNo=1`, `numOfRows=100` 필수)
+- `GET /v1/parking-lots/search` — 전국주차장정보표준데이터 기반 근처 공영주차장 검색(`DATA_GO_KR_API_KEY`)
 - `GET /v1/neis/school-search` — 나이스 학교기본정보(교육청명·학교명 검색)
 - `GET /v1/neis/school-meal` — 나이스 급식식단정보(일자별 메뉴)
 - `GET /v1/mfds/drug-safety/lookup` — 식약처 의약품개요정보(e약은요) + 안전상비의약품 정보(`DATA_GO_KR_API_KEY`)
@@ -40,7 +41,7 @@
 - `KSKILL_PROXY_CACHE_TTL_MS` — 기본 `300000`
 - `KSKILL_PROXY_RATE_LIMIT_WINDOW_MS` — 기본 `60000`
 - `KSKILL_PROXY_RATE_LIMIT_MAX` — 기본 `60`
-- `DATA_GO_KR_API_KEY` - 공공데이터포털 에서 쓰이는 API 인증키 (`household-waste`, `real-estate`, `mfds-drug-safety`, `mfds-food-safety`)
+- `DATA_GO_KR_API_KEY` - 공공데이터포털 에서 쓰이는 API 인증키 (`household-waste`, `parking-lots`, `real-estate`, `mfds-drug-safety`, `mfds-food-safety`)
 
 기본 정책은 **무료 API 공개 프록시 = 무인증** 이다. 대신 endpoint scope 를 좁게 유지하고, cache + rate limit 으로 남용을 늦춘다.
 
@@ -100,6 +101,18 @@ curl -fsS --get 'http://127.0.0.1:4020/v1/household-waste/info' \
   --data-urlencode 'cond[SGG_NM::LIKE]=강남구' \
   --data-urlencode 'pageNo=1' \
   --data-urlencode 'numOfRows=100'
+```
+
+
+공영주차장 검색 예시 (`DATA_GO_KR_API_KEY` 필요):
+
+```bash
+curl -fsS --get 'http://127.0.0.1:4020/v1/parking-lots/search' \
+  --data-urlencode 'latitude=37.573713' \
+  --data-urlencode 'longitude=126.978338' \
+  --data-urlencode 'address_hint=서울특별시 종로구' \
+  --data-urlencode 'limit=3' \
+  --data-urlencode 'radius=1500'
 ```
 
 의약품 안전 체크 예시 (`DATA_GO_KR_API_KEY` 필요):
