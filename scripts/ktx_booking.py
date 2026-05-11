@@ -109,6 +109,16 @@ except ModuleNotFoundError as exc:
 else:
     _KORAIL_IMPORT_ERROR = None
 
+try:
+    from korail2 import NCardPassenger
+    _NCARD_AVAILABLE = True
+except ImportError:
+    _NCARD_AVAILABLE = False
+
+    class NCardPassenger(AdultPassenger):
+        def __init__(self, count=1, card_no='', card='', card_pw='', discount_type='153'):
+            AdultPassenger.__init__(self, count)
+
 DEFAULT_USER_AGENT = "Dalvik/2.1.0 (Linux; U; Android 13; SM-S928N Build/UP1A.231005.007)"
 DYNAPATH_PATHS = [
     "/classes/com.korail.mobile.certification.TicketReservation",
@@ -678,7 +688,13 @@ def command_search(args: argparse.Namespace) -> None:
 
 def command_reserve(args: argparse.Namespace) -> None:
     client = build_client()
-    passengers = parse_passengers(args)
+    ncard_no = getattr(args, "ncard_no", None)
+    if ncard_no:
+        if not _NCARD_AVAILABLE:
+            raise SystemExit("N카드 기능을 사용하려면 korail2-ncard 패키지가 필요합니다: pip install korail2-ncard pycryptodome")
+        passengers = [NCardPassenger(card_no=ncard_no)]
+    else:
+        passengers = parse_passengers(args)
     include_waiting_list = args.include_waiting_list or args.try_waiting
     trains = client.search_train(
         args.dep,
@@ -708,6 +724,64 @@ def command_reservations(_: argparse.Namespace) -> None:
     print_json({
         "count": len(reservations),
         "reservations": [normalize_reservation(reservation) for reservation in reservations],
+    })
+
+
+def normalize_ncard(ncard, index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "card_no": ncard.discount_card_no or "",
+        "ticket_kind": ncard.ticket_kind_name or "",
+        "dep_name": ncard.dep_name or "",
+        "arr_name": ncard.arr_name or "",
+        "valid": ncard.valid or "",
+        "description": str(ncard),
+    }
+
+
+def normalize_ncard_train(train, index: int) -> dict[str, object]:
+    base = normalize_train(train, index)
+    base["price"] = getattr(train, "price", None)
+    base["discount_name"] = getattr(train, "discount_name", None)
+    base["general_remaining_seats"] = getattr(train, "general_remaining_seats", None)
+    base["standing_remaining_seats"] = getattr(train, "standing_remaining_seats", None)
+    return base
+
+
+def command_ncard_list(args: argparse.Namespace) -> None:
+    if not _NCARD_AVAILABLE:
+        raise SystemExit("N카드 기능을 사용하려면 korail2-ncard 패키지가 필요합니다: pip install korail2-ncard pycryptodome")
+    client = build_client()
+    ncards = client.owned_ncards()
+    print_json({
+        "count": len(ncards),
+        "ncards": [normalize_ncard(ncard, index) for index, ncard in enumerate(ncards, start=1)],
+    })
+
+
+def command_ncard_search(args: argparse.Namespace) -> None:
+    if not _NCARD_AVAILABLE:
+        raise SystemExit("N카드 기능을 사용하려면 korail2-ncard 패키지가 필요합니다: pip install korail2-ncard pycryptodome")
+    client = build_client()
+    ncards = client.owned_ncards()
+    if not ncards:
+        raise SystemExit("보유한 N카드가 없습니다.")
+    if args.ncard_index < 1 or args.ncard_index > len(ncards):
+        raise SystemExit(f"ncard-index는 1~{len(ncards)} 사이여야 합니다.")
+    ncard = ncards[args.ncard_index - 1]
+    trains = client.search_owned_ncard_trains(
+        ncard,
+        dep=args.dep,
+        arr=args.arr,
+        date=args.date,
+        time=args.time,
+        train_type=TRAIN_TYPE_MAP[args.train_type],
+    )
+    visible_trains = trains[: args.limit]
+    print_json({
+        "count": len(visible_trains),
+        "ncard": normalize_ncard(ncard, args.ncard_index),
+        "trains": [normalize_ncard_train(train, index) for index, train in enumerate(visible_trains, start=1)],
     })
 
 
@@ -766,7 +840,34 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="좌석이 없으면 예약대기를 시도 (reserve 재조회 시 예약대기 열차 자동 포함)",
     )
+    reserve_parser.add_argument(
+        "--ncard-no",
+        metavar="CARD_NO",
+        default=None,
+        help="N카드 번호 (ncard-list의 card_no). 지정하면 N카드 할인 승객으로 예약",
+    )
     reserve_parser.set_defaults(func=command_reserve)
+
+    ncard_list_parser = subparsers.add_parser("ncard-list", help="보유한 N카드 목록을 조회합니다")
+    ncard_list_parser.set_defaults(func=command_ncard_list)
+
+    ncard_search_parser = subparsers.add_parser("ncard-search", help="N카드 할인 열차를 조회합니다")
+    ncard_search_parser.add_argument("dep", help="출발역")
+    ncard_search_parser.add_argument("arr", help="도착역")
+    ncard_search_parser.add_argument("date", help="출발일 YYYYMMDD")
+    ncard_search_parser.add_argument("time", help="희망 시작 시각 HHMMSS")
+    ncard_search_parser.add_argument(
+        "--ncard-index", type=int, required=True, metavar="N",
+        help="ncard-list 결과의 N카드 순번 (1부터)",
+    )
+    ncard_search_parser.add_argument("--limit", type=int, default=5, help="출력할 최대 열차 수")
+    ncard_search_parser.add_argument(
+        "--train-type",
+        choices=sorted(TRAIN_TYPE_MAP),
+        default="ktx",
+        help="조회할 열차 종류 (기본 ktx)",
+    )
+    ncard_search_parser.set_defaults(func=command_ncard_search)
 
     reservations_parser = subparsers.add_parser("reservations", help="현재 예약 목록을 조회합니다")
     reservations_parser.set_defaults(func=command_reservations)
