@@ -103,6 +103,7 @@ def ensure_runtime() -> None:
                 PINNED_FAST_FLIGHTS,
             ])
 
+
     env = os.environ.copy()
     env["FLIGHT_TICKET_SEARCH_BOOTSTRAPPED"] = "1"
     os.execve(str(py), [str(py), __file__, *sys.argv[1:]], env)
@@ -131,6 +132,7 @@ def nonnegative_float(value: str) -> float:
     if parsed < 0:
         raise argparse.ArgumentTypeError("must be zero or a positive number")
     return parsed
+
 
 
 def iter_dates(start: date, end: date, step_days: int) -> Iterable[date]:
@@ -444,6 +446,7 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--seat", choices=["economy", "premium-economy", "business", "first"], default="economy")
         sp.add_argument("--limit", type=positive_int, default=5)
         sp.add_argument("--sleep", type=nonnegative_float, default=1.5, help="seconds between comparison queries")
+
         sp.add_argument("--format", choices=["json", "markdown"], default="markdown")
 
     s = sub.add_parser("search", help="single one-way or round-trip search")
@@ -457,6 +460,7 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--month", required=True, help="YYYY-MM")
     m.add_argument("--sample", choices=["weekly", "daily"], default="weekly")
     m.add_argument("--max-dates", type=nonnegative_int, default=0, help="cap dates for quick tests; 0 means no cap")
+
     m.set_defaults(func=command_compare_month)
 
     r = sub.add_parser("compare-range", help="compare a custom date range")
@@ -465,6 +469,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--end-date", required=True)
     r.add_argument("--step-days", type=positive_int, default=7)
     r.add_argument("--max-dates", type=nonnegative_int, default=0)
+
     r.set_defaults(func=command_compare_range)
 
     y = sub.add_parser("compare-years", help="compare the same month-day across years")
@@ -472,6 +477,7 @@ def build_parser() -> argparse.ArgumentParser:
     y.add_argument("--years", required=True, help="comma separated years, e.g. 2026,2027")
     y.add_argument("--month-day", required=True, help="MM-DD, e.g. 06-01")
     y.add_argument("--max-dates", type=nonnegative_int, default=0)
+
     y.set_defaults(func=command_compare_years)
     return p
 
@@ -480,6 +486,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     preflight_validate_args(args)
+
     ensure_runtime()
     if getattr(args, "max_dates", 0) == 0:
         args.max_dates = None
