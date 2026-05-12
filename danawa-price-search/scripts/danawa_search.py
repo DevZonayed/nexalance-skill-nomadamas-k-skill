@@ -223,10 +223,9 @@ def offers(pcode: str, limit: int = 20, include_shipping: bool = False) -> Dict[
                 "url": abs_url(link.get("href") if link else None),
             }
         )
-        if len(rows) >= limit:
-            break
-    rows.sort(key=lambda row: (row["total_price"] is None, row["total_price"] or row["price"]))
-    return {"pcode": str(pcode), "title": meta.get("sProductFullName"), "source_url": meta["source_url"], "count": len(rows), "offers": rows, "meta": {"extraction": "danawa-price-ajax", "include_shipping": include_shipping, "ts": int(time.time())}}
+    rows.sort(key=lambda row: (row["total_price"] is None, row["total_price"] or row["price"], row["price"], row["mall"] or ""))
+    rows = rows[:limit]
+    return {"pcode": str(pcode), "title": meta.get("sProductFullName"), "source_url": meta["source_url"], "count": len(rows), "offers": rows, "meta": {"extraction": "danawa-price-ajax", "include_shipping": include_shipping, "sort": "total_price", "ts": int(time.time())}}
 
 
 def compare(query: str, limit: int, offer_limit: int) -> Dict[str, Any]:
@@ -246,20 +245,27 @@ def compare(query: str, limit: int, offer_limit: int) -> Dict[str, Any]:
     return result
 
 
+def positive_int(raw: str) -> int:
+    value = int(raw)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be >= 1")
+    return value
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("search")
     s.add_argument("query")
-    s.add_argument("--limit", type=int, default=10)
+    s.add_argument("--limit", type=positive_int, default=10)
     o = sub.add_parser("offers")
     o.add_argument("pcode")
-    o.add_argument("--limit", type=int, default=20)
+    o.add_argument("--limit", type=positive_int, default=20)
     o.add_argument("--include-shipping", action="store_true")
     c = sub.add_parser("compare")
     c.add_argument("query")
-    c.add_argument("--limit", type=int, default=5)
-    c.add_argument("--offers", type=int, default=5)
+    c.add_argument("--limit", type=positive_int, default=5)
+    c.add_argument("--offers", type=positive_int, default=5)
     args = ap.parse_args()
     try:
         if args.cmd == "search":
