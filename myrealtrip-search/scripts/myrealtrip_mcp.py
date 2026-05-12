@@ -17,6 +17,7 @@ import sys
 from typing import Any, Sequence
 
 DEFAULT_ENDPOINT = "https://mcp-servers.myrealtrip.com/mcp"
+DEFAULT_TIMEOUT_SECONDS = 30.0
 
 
 class MyRealTripMcpError(RuntimeError):
@@ -30,6 +31,16 @@ def parse_json_object(raw: str, *, arg_name: str) -> dict[str, Any]:
         raise argparse.ArgumentTypeError(f"{arg_name}은 올바른 JSON이어야 합니다: {exc}") from exc
     if not isinstance(value, dict):
         raise argparse.ArgumentTypeError(f"{arg_name}은 JSON 객체여야 합니다")
+    return value
+
+
+def parse_positive_float(raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("timeout은 숫자여야 합니다") from exc
+    if value <= 0:
+        raise argparse.ArgumentTypeError("timeout은 0보다 커야 합니다")
     return value
 
 
@@ -66,6 +77,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=os.getenv("MYREALTRIP_MCP_ENDPOINT", DEFAULT_ENDPOINT),
         help="마이리얼트립 MCP 엔드포인트(기본값: %(default)s).",
     )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=parse_positive_float,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        help="MCP 연결/호출 전체 제한 시간(기본값: %(default)s초).",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("tools", help="사용 가능한 MCP 도구와 입력 스키마를 JSON으로 출력합니다.")
@@ -90,7 +107,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-async def run_mcp(endpoint: str, command: str, tool: str | None = None, arguments: dict[str, Any] | None = None) -> Any:
+async def _run_mcp_once(endpoint: str, command: str, tool: str | None, arguments: dict[str, Any] | None) -> Any:
     try:
         from mcp import ClientSession
         from mcp.client.streamable_http import streamablehttp_client
@@ -121,6 +138,25 @@ async def run_mcp(endpoint: str, command: str, tool: str | None = None, argument
     raise MyRealTripMcpError(f"지원하지 않는 명령입니다: {command}")
 
 
+async def run_mcp(
+    endpoint: str,
+    command: str,
+    tool: str | None = None,
+    arguments: dict[str, Any] | None = None,
+    *,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+) -> Any:
+    try:
+        return await asyncio.wait_for(
+            _run_mcp_once(endpoint, command, tool, arguments),
+            timeout=timeout_seconds,
+        )
+    except TimeoutError as exc:
+        raise MyRealTripMcpError(
+            f"마이리얼트립 MCP 엔드포인트 호출 시간이 {timeout_seconds:g}초를 초과했습니다: {endpoint}"
+        ) from exc
+
+
 def jsonable(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
@@ -137,7 +173,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         tool_args.update(parse_kv_pairs(args.kv_args))
 
     try:
-        result = asyncio.run(run_mcp(args.endpoint, args.command, getattr(args, "tool", None), tool_args))
+        result = asyncio.run(
+            run_mcp(
+                args.endpoint,
+                args.command,
+                getattr(args, "tool", None),
+                tool_args,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
     except MyRealTripMcpError as exc:
         print(f"myrealtrip_mcp.py: {exc}", file=sys.stderr)
         return 2
