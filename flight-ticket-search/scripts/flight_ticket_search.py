@@ -11,6 +11,7 @@ import json
 import os
 import re
 import statistics
+import shutil
 import subprocess
 import sys
 import time
@@ -29,18 +30,53 @@ def ensure_runtime() -> None:
     """Install fast-flights into a private cache venv, then re-exec there."""
     if os.environ.get("FLIGHT_TICKET_SEARCH_BOOTSTRAPPED") == "1":
         return
-    try:
-        import fast_flights  # noqa: F401
-        return
-    except Exception:
-        pass
 
     py = VENV_DIR / "bin" / "python"
-    pip = VENV_DIR / "bin" / "pip"
-    if not py.exists():
+
+    def create_venv() -> None:
         CACHE_ROOT.mkdir(parents=True, exist_ok=True)
         subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
-    subprocess.check_call([str(pip), "install", "--disable-pip-version-check", "-q", PINNED_FAST_FLIGHTS])
+
+    def venv_has_fast_flights() -> bool:
+        if not py.exists():
+            return False
+        return subprocess.run(
+            [str(py), "-c", "import fast_flights"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode == 0
+
+    if not py.exists():
+        create_venv()
+
+    if not venv_has_fast_flights():
+        try:
+            subprocess.check_call([str(py), "-m", "ensurepip", "--upgrade"])
+            subprocess.check_call([
+                str(py),
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                "-q",
+                PINNED_FAST_FLIGHTS,
+            ])
+        except (OSError, subprocess.CalledProcessError):
+            # Recover from interrupted or pip-less cache venvs before surfacing a hard failure.
+            shutil.rmtree(VENV_DIR, ignore_errors=True)
+            create_venv()
+            subprocess.check_call([str(py), "-m", "ensurepip", "--upgrade"])
+            subprocess.check_call([
+                str(py),
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                "-q",
+                PINNED_FAST_FLIGHTS,
+            ])
+
     env = os.environ.copy()
     env["FLIGHT_TICKET_SEARCH_BOOTSTRAPPED"] = "1"
     os.execve(str(py), [str(py), __file__, *sys.argv[1:]], env)
@@ -48,6 +84,20 @@ def ensure_runtime() -> None:
 
 def parse_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
+
+
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def nonnegative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be zero or a positive integer")
+    return parsed
 
 
 def iter_dates(start: date, end: date, step_days: int) -> Iterable[date]:
@@ -97,9 +147,13 @@ def make_flight_data(from_airport: str, to_airport: str, outbound: str, return_d
     dest = validate_airport(to_airport, "to")
     if origin == dest:
         raise SystemExit("from and to airports must be different")
-    data = [FlightData(date=outbound, from_airport=origin, to_airport=dest)]
+    outbound_date = parse_date(outbound)
+    data = [FlightData(date=outbound_date.isoformat(), from_airport=origin, to_airport=dest)]
     if return_date:
-        data.append(FlightData(date=return_date, from_airport=dest, to_airport=origin))
+        inbound_date = parse_date(return_date)
+        if inbound_date < outbound_date:
+            raise SystemExit("return-date must be on or after date")
+        data.append(FlightData(date=inbound_date.isoformat(), from_airport=dest, to_airport=origin))
         return data, "round-trip"
     return data, "one-way"
 
@@ -302,9 +356,9 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--from", dest="from_airport", required=True, help="IATA origin airport, e.g. ICN")
         sp.add_argument("--to", dest="to_airport", required=True, help="IATA destination airport, e.g. NRT")
-        sp.add_argument("--adults", type=int, default=1)
+        sp.add_argument("--adults", type=positive_int, default=1)
         sp.add_argument("--seat", choices=["economy", "premium-economy", "business", "first"], default="economy")
-        sp.add_argument("--limit", type=int, default=5)
+        sp.add_argument("--limit", type=positive_int, default=5)
         sp.add_argument("--sleep", type=float, default=1.5, help="seconds between comparison queries")
         sp.add_argument("--format", choices=["json", "markdown"], default="markdown")
 
@@ -318,30 +372,30 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(m)
     m.add_argument("--month", required=True, help="YYYY-MM")
     m.add_argument("--sample", choices=["weekly", "daily"], default="weekly")
-    m.add_argument("--max-dates", type=int, default=0, help="cap dates for quick tests; 0 means no cap")
+    m.add_argument("--max-dates", type=nonnegative_int, default=0, help="cap dates for quick tests; 0 means no cap")
     m.set_defaults(func=command_compare_month)
 
     r = sub.add_parser("compare-range", help="compare a custom date range")
     add_common(r)
     r.add_argument("--start-date", required=True)
     r.add_argument("--end-date", required=True)
-    r.add_argument("--step-days", type=int, default=7)
-    r.add_argument("--max-dates", type=int, default=0)
+    r.add_argument("--step-days", type=positive_int, default=7)
+    r.add_argument("--max-dates", type=nonnegative_int, default=0)
     r.set_defaults(func=command_compare_range)
 
     y = sub.add_parser("compare-years", help="compare the same month-day across years")
     add_common(y)
     y.add_argument("--years", required=True, help="comma separated years, e.g. 2026,2027")
     y.add_argument("--month-day", required=True, help="MM-DD, e.g. 06-01")
-    y.add_argument("--max-dates", type=int, default=0)
+    y.add_argument("--max-dates", type=nonnegative_int, default=0)
     y.set_defaults(func=command_compare_years)
     return p
 
 
 def main() -> None:
-    ensure_runtime()
     parser = build_parser()
     args = parser.parse_args()
+    ensure_runtime()
     if getattr(args, "max_dates", 0) == 0:
         args.max_dates = None
     payload = args.func(args)
