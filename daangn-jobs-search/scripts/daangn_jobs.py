@@ -7,7 +7,10 @@ HEADERS = {"User-Agent":"Mozilla/5.0", "Accept":"application/json,text/html;q=0.
 def fetch_json(url):
     req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=25) as r:
-        return json.load(r)
+        body = r.read()
+        if not body:
+            raise ValueError(f'빈 JSON 응답: {url}')
+        return json.loads(body)
 
 def fetch_text(url):
     req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0", "Accept":"text/html"})
@@ -42,6 +45,27 @@ def absolute(href):
 def print_json(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2))
 
+def parse_html_detail(url):
+    html = fetch_text(url)
+    title = re.search(r'<title>(.*?)</title>', html, re.S)
+    meta = {}
+    for m in re.finditer(r'<meta[^>]+(?:property|name)=["\']([^"\']+)["\'][^>]+content=["\']([^"\']*)["\']', html):
+        key, value = m.group(1), unescape(m.group(2)).strip()
+        if key in ('description', 'og:title', 'og:description', 'og:image'):
+            meta[key] = value
+    json_ld = []
+    for m in re.finditer(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.S):
+        try:
+            json_ld.append(json.loads(unescape(m.group(1))))
+        except Exception:
+            pass
+    return {
+        'source': url,
+        'title': unescape(title.group(1)).strip() if title else meta.get('og:title'),
+        'meta': meta,
+        'json_ld': json_ld[:3],
+    }
+
 
 def cmd_search(args):
     sel=resolve_region(args.region) if args.region else None
@@ -59,7 +83,13 @@ def cmd_search(args):
 
 def cmd_detail(args):
     u=args.url.rstrip('/')+'/?_data=routes%2Fkr.jobs.%24job_post_id'
-    data=fetch_json(u); print_json({'source':u,'jobPost':data.get('jobPost') or data})
+    try:
+        data=fetch_json(u)
+        print_json({'source':u,'jobPost':data.get('jobPost') or data})
+    except Exception:
+        detail = parse_html_detail(args.url)
+        detail['data_source_attempted'] = u
+        print_json(detail)
 
 p=argparse.ArgumentParser(description='Daangn jobs read-only search/detail')
 sub=p.add_subparsers(dest='cmd', required=True)

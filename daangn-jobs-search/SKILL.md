@@ -38,7 +38,7 @@ metadata:
 
 - Region resolver: `https://www.daangn.com/kr/api/v1/regions/keyword?keyword=<지역명>`
 - Search `_data`: `/kr/jobs/?in=<지역명>-<id>&search=<keyword>&_data=routes/kr.jobs._index`
-- Detail `_data`: `<job-url>?_data=routes%2Fkr.jobs.%24job_post_id`
+- Detail fallback: `<job-url>` redirects to `jobs.daangn.com/job-posts/<id>` and exposes public HTML title/meta/JSON-LD. The helper first tries the legacy `_data` route and falls back to HTML meta when that route returns an empty response.
 
 ## Workflow
 
@@ -58,7 +58,7 @@ python3 daangn-jobs-search/scripts/daangn_jobs.py detail "https://www.daangn.com
 ## Output fields
 
 - title, company, region, address, salary, salaryType, workDays, workTimeStart, workTimeEnd, closed, url
-- detail: jobPost 원문
+- detail: `jobPost` 원문 if the `_data` route is available; otherwise public page `title`, `meta`, and `json_ld`
 
 ## Region handling
 

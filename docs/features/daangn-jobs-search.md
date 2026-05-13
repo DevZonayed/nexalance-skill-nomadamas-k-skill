@@ -14,7 +14,7 @@
 
 1. 지역 해석: `https://www.daangn.com/kr/api/v1/regions/keyword?keyword=<지역명>`
 2. 검색: `https://www.daangn.com/kr/jobs/?in=<지역명>-<id>&search=<키워드>&_data=routes/kr.jobs._index`
-3. 상세: `<공고 URL>?_data=routes%2Fkr.jobs.%24job_post_id`
+3. 상세: `<공고 URL>` → `jobs.daangn.com/job-posts/<id>` 공개 HTML의 title/meta/JSON-LD(헬퍼는 legacy `_data`를 먼저 시도 후 빈 응답이면 HTML 메타로 fallback)
 
 ## 로컬 실행
 
@@ -33,7 +33,7 @@ python3 daangn-jobs-search/scripts/daangn_jobs.py detail "https://www.daangn.com
 
 ## 출력 해석
 
-검색 결과는 `title`, `company`, `region`, `address`, `salary`, `salaryType`, `workDays`, `workTimeStart`, `workTimeEnd`, `closed`, `url`을 우선 확인합니다. 지원 가능 여부나 근무 조건은 상세 조회의 `jobPost` 원문까지 본 뒤 정리합니다.
+검색 결과는 `title`, `company`, `region`, `address`, `salary`, `salaryType`, `workDays`, `workTimeStart`, `workTimeEnd`, `closed`, `url`을 우선 확인합니다. 상세 조회는 가능하면 `jobPost` 원문을 사용하고, 공개 `_data`가 빈 응답이면 HTML title/meta/JSON-LD를 근거로 정리합니다.
 
 ## 제한사항
 
