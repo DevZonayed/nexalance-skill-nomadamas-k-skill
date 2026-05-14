@@ -1,0 +1,40 @@
+# 대신증권 리포트 조회 가이드
+
+`daishin-report-search`는 `jay-jo-0/github_pages_repo` GitHub Pages 미러에 올라오는 대신증권 리포트 HTML을 최신순으로 찾고 원문/설명 페이지를 JSON으로 정리하는 조회 전용 스킬이다.
+
+## 공개 접근 경로
+
+- 목록: `https://api.github.com/repos/jay-jo-0/github_pages_repo/git/trees/main?recursive=1`
+- 원문 HTML: `https://raw.githubusercontent.com/Jay-jo-0/github_pages_repo/main/<YYYYMMDDHHMMSS.html>`
+- 브라우저 URL: `https://jay-jo-0.github.io/github_pages_repo/<YYYYMMDDHHMMSS.html>`
+- 설명 페이지: `<YYYYMMDDHHMMSS_explain.html>`이 있을 때만 제공
+
+파일명 timestamp를 KST 게시 추정 시각으로 표시한다. GitHub API와 raw 파일은 공개 unauthenticated endpoint라서 proxy를 쓰지 않는다.
+
+## 사용 예시
+
+```bash
+node packages/daishin-report-search/src/cli.js --limit 10
+node packages/daishin-report-search/src/cli.js 반도체 --limit 5 --max-inspect 100
+node packages/daishin-report-search/src/cli.js --id 20260511082352 --include-explain
+```
+
+```js
+const { listReports, fetchReport } = require("daishin-report-search")
+
+const latest = await listReports({ limit: 10 })
+const semis = await listReports({ query: "반도체", limit: 5, maxInspect: 100 })
+const detail = await fetchReport("20260511082352", { includeExplain: true })
+```
+
+## 출력 필드
+
+목록 항목은 `id`, `date`, `time`, `timestamp`, `title`, `headings`, `excerpt`, `ratingTargets`, `pageUrl`, `rawUrl`, `apiUrl`, `hasExplain`, `explainUrl`을 포함한다.
+
+상세 조회는 원문 `text`를 추가하고, `includeExplain`이 켜져 있으면 `explain` 객체에 설명 페이지의 `title`, `headings`, `text`, `excerpt`, `pageUrl`을 포함한다.
+
+## 주의 사항
+
+- 투자 판단이나 매매 추천이 아니라 공개 리포트 조회 보조 기능이다.
+- GitHub unauthenticated API rate limit, upstream repository 변경, HTML 구조 변경 시 경고나 오류가 반환될 수 있다.
+- 검색어가 있으면 최신 파일부터 `maxInspect`개까지 원문을 읽어 매칭하므로 너무 낮게 잡으면 결과가 누락될 수 있다.
