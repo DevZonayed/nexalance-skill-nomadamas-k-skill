@@ -13,6 +13,14 @@ from typing import Any
 PROXY_BASE_URL_ENV_VAR = "KSKILL_PROXY_BASE_URL"
 DEFAULT_PROXY_BASE_URL = "https://k-skill-proxy.nomadamas.org"
 BATCH_LIMIT = 100
+VALIDATE_TEXT_FIELD_LIMITS = {
+    "p_nm": 30,
+    "p_nm2": 30,
+    "b_nm": 200,
+    "b_sector": 100,
+    "b_type": 100,
+    "b_adr": 500,
+}
 
 
 class ApiError(RuntimeError):
@@ -63,6 +71,28 @@ def normalize_start_date(value: Any) -> str:
     return normalized
 
 
+def normalize_validate_text(value: Any, field_name: str, *, required: bool = False) -> str | None:
+    text = _text_or_none(value)
+    if not text:
+        if required:
+            raise ValueError(f"{field_name}을(를) 입력하세요.")
+        return None
+    max_length = VALIDATE_TEXT_FIELD_LIMITS.get(field_name)
+    if max_length and len(text) > max_length:
+        raise ValueError(f"{field_name}은(는) {max_length}자 이하여야 합니다.")
+    return text
+
+
+def normalize_corp_no(value: Any) -> str | None:
+    raw = _text_or_none(value)
+    if not raw:
+        return None
+    normalized = re.sub(r"\D", "", raw)
+    if not re.fullmatch(r"\d{13}", normalized):
+        raise ValueError("corp_no는 숫자 13자리여야 합니다.")
+    return normalized
+
+
 def build_status_payload(business_numbers: list[Any]) -> dict[str, list[str]]:
     numbers = [normalize_business_number(value) for value in business_numbers]
     numbers = list(dict.fromkeys(numbers))
@@ -74,9 +104,7 @@ def build_status_payload(business_numbers: list[Any]) -> dict[str, list[str]]:
 
 
 def build_validate_business(**kwargs: Any) -> dict[str, str]:
-    p_nm = _text_or_none(kwargs.get("p_nm"))
-    if not p_nm:
-        raise ValueError("대표자 성명(p_nm)을 입력하세요.")
+    p_nm = normalize_validate_text(kwargs.get("p_nm"), "p_nm", required=True)
 
     business = {
         "b_no": normalize_business_number(kwargs.get("b_no")),
@@ -85,13 +113,13 @@ def build_validate_business(**kwargs: Any) -> dict[str, str]:
     }
 
     for key in ("p_nm2", "b_nm", "b_sector", "b_type", "b_adr"):
-        value = _text_or_none(kwargs.get(key))
+        value = normalize_validate_text(kwargs.get(key), key)
         if value:
             business[key] = value
 
-    corp_no = _text_or_none(kwargs.get("corp_no"))
+    corp_no = normalize_corp_no(kwargs.get("corp_no"))
     if corp_no:
-        business["corp_no"] = re.sub(r"\D", "", corp_no)
+        business["corp_no"] = corp_no
     return business
 
 

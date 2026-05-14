@@ -1,4 +1,6 @@
 import json
+import importlib.util
+from pathlib import Path
 import unittest
 import urllib.error
 
@@ -50,6 +52,43 @@ class NtsBusinessNormalizationTest(unittest.TestCase):
                 "corp_no": "1101111234567",
             },
         )
+
+    def test_build_validate_business_rejects_malformed_or_oversized_optional_fields(self):
+        base = {"b_no": "1234567890", "start_dt": "20200101", "p_nm": "홍길동"}
+
+        with self.assertRaisesRegex(ValueError, "corp_no"):
+            build_validate_business(**base, corp_no="123")
+
+        with self.assertRaisesRegex(ValueError, "p_nm"):
+            build_validate_business(b_no="1234567890", start_dt="20200101", p_nm="홍" * 31)
+
+        with self.assertRaisesRegex(ValueError, "b_adr"):
+            build_validate_business(**base, b_adr="가" * 501)
+
+    def test_skill_local_helper_matches_runtime_validation_behavior(self):
+        helper_path = Path(__file__).resolve().parents[1] / "nts-business-registration" / "scripts" / "nts_business_registration.py"
+        spec = importlib.util.spec_from_file_location("skill_local_nts_business_registration", helper_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        self.assertEqual(
+            module.build_validate_business(
+                b_no="123-45-67890",
+                start_dt="2020.01.31",
+                p_nm="홍길동",
+                corp_no="110111-1234567",
+            ),
+            {
+                "b_no": "1234567890",
+                "start_dt": "20200131",
+                "p_nm": "홍길동",
+                "corp_no": "1101111234567",
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "corp_no"):
+            module.build_validate_business(b_no="1234567890", start_dt="20200101", p_nm="홍길동", corp_no="abc")
 
 
 class NtsBusinessProxyTest(unittest.TestCase):

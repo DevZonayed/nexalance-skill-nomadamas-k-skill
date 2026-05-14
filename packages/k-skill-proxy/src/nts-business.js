@@ -2,6 +2,14 @@ const NTS_BUSINESSMAN_UPSTREAM_BASE_URL = "https://api.odcloud.kr/api/nts-busine
 const NTS_BATCH_LIMIT = 100;
 const NTS_BUSINESS_OPERATIONS = new Set(["status", "validate"]);
 const NTS_VALIDATE_OPTIONAL_TEXT_FIELDS = ["p_nm2", "b_nm", "b_sector", "b_type", "b_adr"];
+const NTS_VALIDATE_TEXT_FIELD_LIMITS = {
+  p_nm: 30,
+  p_nm2: 30,
+  b_nm: 200,
+  b_sector: 100,
+  b_type: 100,
+  b_adr: 500
+};
 
 function trimOrNull(value) {
   if (value === undefined || value === null) {
@@ -73,6 +81,22 @@ function normalizeOptionalDigits(value, label) {
   return normalized;
 }
 
+function normalizeNtsValidateText(value, fieldName, { required = false } = {}) {
+  const normalized = trimOrNull(value);
+  if (!normalized) {
+    if (required) {
+      throw new Error(`Provide ${fieldName} for each business.`);
+    }
+    return null;
+  }
+
+  const maxLength = NTS_VALIDATE_TEXT_FIELD_LIMITS[fieldName];
+  if (maxLength && normalized.length > maxLength) {
+    throw new Error(`Provide ${fieldName} up to ${maxLength} characters.`);
+  }
+  return normalized;
+}
+
 function normalizeNtsBusinessStatusQuery(body = {}) {
   return {
     b_no: normalizeNtsBusinessNumbers(body.b_no ?? body.business_numbers ?? body.businessNumbers)
@@ -84,10 +108,11 @@ function normalizeNtsBusinessValidateItem(item) {
     throw new Error("Each business must be an object.");
   }
 
-  const pNm = trimOrNull(item.p_nm ?? item.owner_name ?? item.ownerName ?? item.representative_name);
-  if (!pNm) {
-    throw new Error("Provide p_nm (representative name) for each business.");
-  }
+  const pNm = normalizeNtsValidateText(
+    item.p_nm ?? item.owner_name ?? item.ownerName ?? item.representative_name,
+    "p_nm",
+    { required: true }
+  );
 
   const normalized = {
     b_no: normalizeBusinessNumber(item.b_no ?? item.business_number ?? item.businessNumber),
@@ -96,7 +121,7 @@ function normalizeNtsBusinessValidateItem(item) {
   };
 
   for (const key of NTS_VALIDATE_OPTIONAL_TEXT_FIELDS) {
-    const value = trimOrNull(item[key]);
+    const value = normalizeNtsValidateText(item[key], key);
     if (value) {
       normalized[key] = value;
     }
@@ -104,6 +129,9 @@ function normalizeNtsBusinessValidateItem(item) {
 
   const corpNo = normalizeOptionalDigits(item.corp_no ?? item.corpNo, "corp_no");
   if (corpNo) {
+    if (!/^\d{13}$/.test(corpNo)) {
+      throw new Error("Provide valid corp_no as 13 digits.");
+    }
     normalized.corp_no = corpNo;
   }
 

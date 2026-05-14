@@ -2744,7 +2744,7 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
       reply.code(502);
       return {
         error: "proxy_error",
-        message: error.message,
+        message: "NTS business upstream request failed.",
         proxy: {
           name: config.proxyName,
           cache: {

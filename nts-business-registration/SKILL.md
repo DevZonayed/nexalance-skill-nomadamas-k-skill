@@ -37,6 +37,13 @@ metadata:
 - `KSKILL_PROXY_BASE_URL` — self-host·별도 프록시를 쓸 때만 설정. 비우면 기본 hosted `https://k-skill-proxy.nomadamas.org` 를 사용한다.
 - `DATA_GO_KR_API_KEY` 는 프록시 운영 서버 환경에만 둔다. 공공데이터포털에서 `국세청_사업자등록정보 진위확인 및 상태조회 서비스` 활용신청이 되어 있어야 한다.
 
+## Validate privacy boundary
+
+- `validate`는 대표자명(`p_nm`), 개업일자(`start_dt`), 주소·상호 같은 선택 메타데이터를 hosted proxy와 공공데이터포털 upstream으로 전송한다.
+- hosted proxy는 `validate` 성공 응답을 캐시하지 않고, 프록시 `query` echo를 붙이지 않으며, upstream이 요청값을 되돌려도 민감 입력 필드를 응답에서 제거한다.
+- 프록시의 기본 Fastify request logging은 꺼져 있다. 운영자가 별도 로그를 켠 self-host 환경에서는 요청 본문 로깅 정책을 직접 점검해야 한다.
+- hosted proxy 경유가 부담스러운 진위확인 업무는 `KSKILL_PROXY_BASE_URL`로 직접 운영하는 self-host proxy를 지정한다.
+
 ## Official surfaces
 
 - 공공데이터포털 문서: `https://www.data.go.kr/tcs/dss/selectApiDataDetailView.do?publicDataPk=15081808`
@@ -67,6 +74,8 @@ metadata:
 - `b_sector`: 주업태명
 - `b_type`: 주종목명
 - `b_adr`: 사업장주소
+
+텍스트 필드는 NTS 입력 규격에 맞춰 보수적으로 길이를 제한한다(`p_nm`/`p_nm2` 30자, `b_nm` 200자, `b_sector`/`b_type` 100자, `b_adr` 500자). `corp_no`는 제공할 경우 숫자 13자리여야 한다.
 
 ## Workflow
 

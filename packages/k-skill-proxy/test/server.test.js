@@ -194,6 +194,24 @@ test("NTS business normalizers validate status and authenticity payloads", () =>
     () => normalizeNtsBusinessStatusQuery({ b_no: tooManyBusinessNumbers }),
     /up to 100/
   );
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({
+      businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍길동", corp_no: "123" }]
+    }),
+    /corp_no/
+  );
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({
+      businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍".repeat(31) }]
+    }),
+    /p_nm/
+  );
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({
+      businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍길동", b_adr: "가".repeat(501) }]
+    }),
+    /b_adr/
+  );
 });
 
 test("NTS business status route proxies POST body with service key server-side", async (t) => {
@@ -418,7 +436,7 @@ test("NTS business route maps upstream fetch failures to 502 without caching", a
 
   assert.equal(first.statusCode, 502);
   assert.equal(firstBody.error, "proxy_error");
-  assert.match(firstBody.message, /network down/);
+  assert.equal(firstBody.message, "NTS business upstream request failed.");
 
   const second = await app.inject({
     method: "POST",
@@ -427,6 +445,33 @@ test("NTS business route maps upstream fetch failures to 502 without caching", a
   });
   assert.equal(second.statusCode, 502);
   assert.equal(calls, 2, "fetch failures must not be cached");
+});
+
+test("NTS business route does not leak service keys from upstream fetch exception messages", async (t) => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    throw new Error(`proxy tunnel failed for ${url}`);
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "super-secret-data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  const body = response.json();
+  const bodyText = JSON.stringify(body);
+
+  assert.equal(response.statusCode, 502);
+  assert.equal(body.error, "proxy_error");
+  assert.equal(body.message, "NTS business upstream request failed.");
+  assert.equal(bodyText.includes("super-secret-data-go-key"), false);
+  assert.equal(bodyText.includes("serviceKey"), false);
 });
 
 test("health endpoint stays public and reports auth/upstream status", async (t) => {
