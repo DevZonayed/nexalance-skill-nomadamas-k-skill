@@ -43,7 +43,7 @@ metadata:
 ### Fallback source: GitHub contents API for an exact file
 
 - exact-file endpoint: `https://api.github.com/repos/jay-jo-0/github_pages_repo/contents/<path>?ref=main`
-- use only when raw detail URL is unavailable or the caller needs GitHub content metadata for a known timestamp.
+- used automatically for a known timestamp when the raw detail URL is unavailable; it also provides GitHub content metadata for manual diagnostics.
 
 No `k-skill-proxy` route is used because the upstream is public and does not require an API key.
 
@@ -123,7 +123,8 @@ Always state that the timestamp is filename-derived and that report contents can
 2. If a query is present, inspect newer candidates up to `maxInspect` until enough matches are found or the budget is exhausted; return a warning if the budget is exhausted.
 3. For a known id, fetch raw detail directly. If explanation is requested, fetch `<id>_explain.html`; if absent, return the original report plus a warning.
 4. If the tree endpoint is truncated, blocked, rate-limited, or changed, report that as a source warning/failure instead of guessing hidden pages.
-5. If the caller has authenticated GitHub access, pass `githubToken` / `githubHeaders` in library calls or set `DAISHIN_GITHUB_TOKEN` / `GITHUB_TOKEN` for the CLI; do not require or proxy a token by default.
+5. For a known id, if the raw detail URL fails, fall back to the GitHub contents API for that exact file path. Explanation pages use the same exact-file fallback but remain optional and return a warning if unavailable.
+6. If the caller has authenticated GitHub access, pass `githubToken` / `githubHeaders` in library calls or set `DAISHIN_GITHUB_TOKEN` / `GITHUB_TOKEN` for the CLI; these credentials are scoped to `api.github.com` requests and are not sent to raw detail URLs. Do not require or proxy a token by default.
 
 ## Done when
 
@@ -144,4 +145,4 @@ Always state that the timestamp is filename-derived and that report contents can
 
 - Read-only lookup only; no login, trading, order placement, recommendation, or investment advice.
 - Do not scrape private Daishin services or bypass CAPTCHA/login walls.
-- No secrets or API keys are required. Optional GitHub tokens are caller-owned and used only when explicitly supplied via options or environment.
+- No secrets or API keys are required. Optional GitHub tokens are caller-owned, used only when explicitly supplied via options or environment, and scoped to GitHub API hosts.

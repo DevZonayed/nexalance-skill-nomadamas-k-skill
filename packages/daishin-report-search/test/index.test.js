@@ -278,6 +278,73 @@ test("listReports sends caller GitHub headers and token to discovery requests", 
   assert.equal(result.items.length, 1)
   assert.equal(calls[0].headers.authorization, "Bearer test-token")
   assert.equal(calls[0].headers["x-github-api-version"], "2022-11-28")
+  assert.equal(calls[1].headers.authorization, undefined)
+  assert.equal(calls[1].headers["x-github-api-version"], undefined)
+})
+
+test("fetchReport does not forward caller GitHub auth to raw detail requests", async () => {
+  const calls = []
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url, headers: init.headers })
+    return textResponse("<h1>권한 범위 테스트</h1><p>본문</p>")
+  }
+
+  const report = await fetchReport("20260511082352", {
+    githubToken: "test-token",
+    githubHeaders: { "x-github-api-version": "2022-11-28" },
+    fetcher
+  })
+
+  assert.equal(report.title, "권한 범위 테스트")
+  assert.equal(calls.length, 1)
+  assert.match(calls[0].url, /raw\.githubusercontent\.com/)
+  assert.equal(calls[0].headers.authorization, undefined)
+  assert.equal(calls[0].headers["x-github-api-version"], undefined)
+})
+
+test("fetchReport falls back to GitHub contents API when raw exact report fetch fails", async () => {
+  const calls = []
+  const html = Buffer.from("<h1>콘텐츠 API 원문</h1><p>fallback body</p>", "utf8").toString("base64")
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url, headers: init.headers })
+    if (url.includes("raw.githubusercontent.com")) {
+      return textResponse("not found", false)
+    }
+    if (url.includes("/contents/20260511082352.html")) {
+      return jsonResponse({ content: html, encoding: "base64" })
+    }
+    throw new Error(`unexpected url ${url}`)
+  }
+
+  const report = await fetchReport("20260511082352", {
+    githubToken: "test-token",
+    githubHeaders: { "x-github-api-version": "2022-11-28" },
+    fetcher
+  })
+
+  assert.equal(report.title, "콘텐츠 API 원문")
+  assert.match(report.text, /fallback body/)
+  assert.match(calls[0].url, /raw\.githubusercontent\.com/)
+  assert.equal(calls[0].headers.authorization, undefined)
+  assert.match(calls[1].url, /api\.github\.com/)
+  assert.equal(calls[1].headers.authorization, "Bearer test-token")
+  assert.equal(calls[1].headers["x-github-api-version"], "2022-11-28")
+})
+
+test("listReports reports the actual number of inspected detail pages", async () => {
+  const detailCalls = []
+  const tree = Array.from({ length: 10 }, (_, index) => ({ path: timestampPath("202603", index), type: "blob" }))
+  const fetcher = async (url) => {
+    if (url === TREE_URL) return jsonResponse({ tree })
+    detailCalls.push(url)
+    return textResponse("<h1>시장 요약</h1><p>일반 내용</p>")
+  }
+
+  const result = await listReports({ limit: 2, fetcher })
+
+  assert.equal(result.items.length, 2)
+  assert.equal(detailCalls.length, 2)
+  assert.equal(result.source.inspectedReports, 2)
 })
 
 test("fetchReport returns detail plus optional explanation page", async () => {

@@ -50,6 +50,7 @@ async function listReports(options = {}) {
     : []
   const candidates = parseTreePaths(paths)
   const items = []
+  let inspectedReports = 0
 
   for (const candidate of candidates.slice(0, inspectBudget)) {
     let item = { ...candidate, ...buildReportUrls(candidate.path) }
@@ -59,6 +60,7 @@ async function listReports(options = {}) {
     }
 
     try {
+      inspectedReports += 1
       const html = await fetchText(fetcher, item.rawUrl, options)
       const parsed = parseReportHtml(html)
       item = {
@@ -87,7 +89,7 @@ async function listReports(options = {}) {
     count: items.length,
     items,
     warnings,
-    source: buildSource(candidates.length, Math.min(candidates.length, inspectBudget))
+    source: buildSource(candidates.length, inspectedReports)
   }
 }
 
@@ -100,7 +102,7 @@ async function fetchReport(idOrPath, options = {}) {
   if (!meta || meta.isExplain) throw new Error(`invalid report id or path: ${idOrPath}`)
 
   const urls = buildReportUrls(path)
-  const html = await fetchText(fetcher, urls.rawUrl, options)
+  const html = await fetchReportHtml(fetcher, urls, options)
   const parsed = parseReportHtml(html)
   const report = {
     ...meta,
@@ -117,7 +119,7 @@ async function fetchReport(idOrPath, options = {}) {
     const explainPath = `${meta.id}_explain.html`
     const explainUrls = buildReportUrls(explainPath)
     try {
-      const explainHtml = await fetchText(fetcher, explainUrls.rawUrl, options)
+      const explainHtml = await fetchReportHtml(fetcher, explainUrls, options)
       const explainParsed = parseReportHtml(explainHtml)
       report.explain = {
         ...parseTimestamp(explainPath),
@@ -247,16 +249,37 @@ function matchesQuery(item, query) {
 }
 
 async function fetchJson(fetcher, url, options = {}) {
-  const response = await fetcher(url, { headers: requestHeaders(options) })
+  const response = await fetcher(url, { headers: requestHeaders(url, options) })
   await assertOk(response, url)
   if (typeof response.json === "function") return response.json()
   return JSON.parse(await response.text())
 }
 
 async function fetchText(fetcher, url, options = {}) {
-  const response = await fetcher(url, { headers: requestHeaders(options) })
+  const response = await fetcher(url, { headers: requestHeaders(url, options) })
   await assertOk(response, url)
   return response.text()
+}
+
+async function fetchReportHtml(fetcher, urls, options = {}) {
+  try {
+    return await fetchText(fetcher, urls.rawUrl, options)
+  } catch (rawError) {
+    try {
+      const contents = await fetchJson(fetcher, urls.apiUrl, options)
+      return decodeContentsApiHtml(contents, urls.apiUrl)
+    } catch (contentsError) {
+      const error = new Error(`${rawError.message}; contents fallback failed: ${contentsError.message}`)
+      error.cause = rawError
+      error.fallbackCause = contentsError
+      error.url = rawError.url
+      error.status = rawError.status
+      error.statusText = rawError.statusText
+      error.kind = rawError.kind
+      error.rateLimit = rawError.rateLimit
+      throw error
+    }
+  }
 }
 
 async function assertOk(response, url) {
@@ -273,15 +296,35 @@ async function assertOk(response, url) {
   throw error
 }
 
-function requestHeaders(options = {}) {
+function requestHeaders(url, options = {}) {
   const headers = {
     "user-agent": "k-skill daishin-report-search (+https://github.com/NomaDamas/k-skill)",
     accept: "application/vnd.github+json, text/html;q=0.9, */*;q=0.8"
   }
-  Object.assign(headers, options.githubHeaders || {})
-  const token = options.githubToken || readEnvToken()
-  if (token && !hasHeader(headers, "authorization")) headers.authorization = `Bearer ${token}`
+  if (isGitHubApiUrl(url)) {
+    Object.assign(headers, options.githubHeaders || {})
+    const token = options.githubToken || readEnvToken()
+    if (token && !hasHeader(headers, "authorization")) headers.authorization = `Bearer ${token}`
+  }
   return headers
+}
+
+function decodeContentsApiHtml(contents, url) {
+  if (!contents || typeof contents.content !== "string") {
+    throw new Error(`GitHub contents response missing content for ${url}`)
+  }
+  if (contents.encoding && contents.encoding !== "base64") {
+    throw new Error(`unsupported GitHub contents encoding ${contents.encoding} for ${url}`)
+  }
+  return Buffer.from(contents.content.replace(/\s+/g, ""), "base64").toString("utf8")
+}
+
+function isGitHubApiUrl(url) {
+  try {
+    return new URL(url).hostname.toLowerCase() === "api.github.com"
+  } catch {
+    return false
+  }
 }
 
 function buildSource(totalReportsDiscovered, inspectedReports, error) {
