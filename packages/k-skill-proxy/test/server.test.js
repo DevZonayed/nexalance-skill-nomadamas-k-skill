@@ -15,6 +15,8 @@ const {
   normalizeKosisDataQuery,
   normalizeKosisMetaQuery,
   normalizeKosisSearchQuery,
+  normalizeNtsBusinessStatusQuery,
+  normalizeNtsBusinessValidateQuery,
   proxyAirKoreaRequest,
   proxyData4LibraryRequest,
   proxyHrfcoWaterLevelRequest,
@@ -149,6 +151,327 @@ test("food-safety search does not cache upstream failures so transient errors se
   assert.equal(third.json().items[0].product_name, "재시도 성공 식품");
 
   assert.equal(recallCalls.length, 2, "upstream hit on first (fail) and second (recovered) - third served from cache");
+});
+
+test("NTS business normalizers validate status and authenticity payloads", () => {
+  const tooManyBusinessNumbers = Array.from({ length: 101 }, (_, index) => String(index).padStart(10, "0"));
+
+  assert.deepEqual(normalizeNtsBusinessStatusQuery({ b_no: "123-45-67890, 9876543210" }), {
+    b_no: ["1234567890", "9876543210"]
+  });
+
+  assert.deepEqual(
+    normalizeNtsBusinessValidateQuery({
+      businesses: [
+        {
+          b_no: "123-45-67890",
+          start_dt: "2020-01-31",
+          p_nm: "홍길동",
+          b_nm: "테스트상사",
+          corp_no: "110111-1234567"
+        }
+      ]
+    }),
+    {
+      businesses: [
+        {
+          b_no: "1234567890",
+          start_dt: "20200131",
+          p_nm: "홍길동",
+          b_nm: "테스트상사",
+          corp_no: "1101111234567"
+        }
+      ]
+    }
+  );
+
+  assert.throws(() => normalizeNtsBusinessStatusQuery({ b_no: "123" }), /business registration number/);
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({ businesses: [{ b_no: "1234567890", p_nm: "홍길동" }] }),
+    /start_dt/
+  );
+  assert.throws(
+    () => normalizeNtsBusinessStatusQuery({ b_no: tooManyBusinessNumbers }),
+    /up to 100/
+  );
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({
+      businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍길동", corp_no: "123" }]
+    }),
+    /corp_no/
+  );
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({
+      businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍".repeat(31) }]
+    }),
+    /p_nm/
+  );
+  assert.throws(
+    () => normalizeNtsBusinessValidateQuery({
+      businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍길동", b_adr: "가".repeat(501) }]
+    }),
+    /b_adr/
+  );
+});
+
+test("NTS business status route proxies POST body with service key server-side", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response(
+      JSON.stringify({ status_code: "OK", request_cnt: 1, data: [{ b_no: "1234567890", b_stt: "계속사업자" }] }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["123-45-67890"] }
+  });
+
+  const body = response.json();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(body.data[0].b_stt, "계속사업자");
+  assert.equal(body.proxy.cache.hit, false);
+  assert.match(calls[0].url, /\/nts-businessman\/v1\/status\?serviceKey=data-go-key$/);
+  assert.deepEqual(JSON.parse(calls[0].options.body), { b_no: ["1234567890"] });
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers["content-type"], "application/json");
+
+  const cached = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  const cachedBody = cached.json();
+
+  assert.equal(cached.statusCode, 200);
+  assert.equal(cachedBody.proxy.cache.hit, true);
+  assert.equal(calls.length, 1);
+});
+
+test("NTS business validate route normalizes businesses and reports missing key", async (t) => {
+  const missingKeyApp = buildServer();
+  t.after(async () => {
+    await missingKeyApp.close();
+  });
+
+  const unavailable = await missingKeyApp.inject({
+    method: "POST",
+    url: "/v1/nts-business/validate",
+    payload: { businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍길동" }] }
+  });
+  const unavailableBody = unavailable.json();
+
+  assert.equal(unavailable.statusCode, 503);
+  assert.equal(unavailableBody.error, "upstream_not_configured");
+
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response(
+      JSON.stringify({ status_code: "OK", valid_cnt: 1, data: [{ b_no: "1234567890", valid: "01", valid_msg: "확인할 수 있습니다." }] }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/validate",
+    payload: { businesses: [{ b_no: "123-45-67890", start_dt: "2020.01.01", p_nm: "홍길동", p_nm2: "", b_adr: "서울" }] }
+  });
+
+  const body = response.json();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(body.data[0].valid, "01");
+  assert.match(calls[0].url, /\/nts-businessman\/v1\/validate\?serviceKey=data-go-key$/);
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    businesses: [{ b_no: "1234567890", start_dt: "20200101", p_nm: "홍길동", b_adr: "서울" }]
+  });
+});
+
+test("NTS business validate route does not cache or echo sensitive query fields", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response(
+      JSON.stringify({
+        status_code: "OK",
+        valid_cnt: 1,
+        data: [{
+          b_no: "1234567890",
+          valid: "01",
+          request_param: {
+            b_no: "1234567890",
+            start_dt: "20200101",
+            p_nm: "홍길동",
+            b_adr: "서울시 중구"
+          }
+        }]
+      }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const payload = {
+    businesses: [{
+      b_no: "123-45-67890",
+      start_dt: "2020.01.01",
+      p_nm: "홍길동",
+      b_adr: "서울시 중구"
+    }]
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/validate",
+    payload
+  });
+  const firstBody = first.json();
+  const firstBodyText = JSON.stringify(firstBody);
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(firstBody.proxy.cache.hit, false);
+  assert.equal(firstBody.query, undefined, "validate responses must not echo representative/date/address inputs");
+  assert.equal(firstBodyText.includes("홍길동"), false);
+  assert.equal(firstBodyText.includes("20200101"), false);
+  assert.equal(firstBodyText.includes("서울시 중구"), false);
+  assert.deepEqual(firstBody.data[0].request_param, { b_no: "1234567890" });
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/validate",
+    payload
+  });
+  const secondBody = second.json();
+
+  assert.equal(second.statusCode, 200);
+  assert.equal(secondBody.proxy.cache.hit, false);
+  assert.equal(calls.length, 2, "validate successes must not be cached because they contain sensitive inputs");
+});
+
+test("NTS business semantic upstream failures are non-cacheable errors", async (t) => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return new Response(
+      JSON.stringify({ status_code: "SERVICE_ERROR", message: "upstream service failure" }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  const firstBody = first.json();
+
+  assert.equal(first.statusCode, 502);
+  assert.equal(firstBody.error, "upstream_error");
+  assert.equal(firstBody.upstream_status_code, "SERVICE_ERROR");
+  assert.equal(firstBody.proxy.cache.hit, false);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+
+  assert.equal(second.statusCode, 502);
+  assert.equal(calls, 2, "semantic upstream failures must not be cached");
+});
+
+test("NTS business route maps upstream fetch failures to 502 without caching", async (t) => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    throw new Error("network down");
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  const firstBody = first.json();
+
+  assert.equal(first.statusCode, 502);
+  assert.equal(firstBody.error, "proxy_error");
+  assert.equal(firstBody.message, "NTS business upstream request failed.");
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  assert.equal(second.statusCode, 502);
+  assert.equal(calls, 2, "fetch failures must not be cached");
+});
+
+test("NTS business route does not leak service keys from upstream fetch exception messages", async (t) => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    throw new Error(`proxy tunnel failed for ${url}`);
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "super-secret-data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  const body = response.json();
+  const bodyText = JSON.stringify(body);
+
+  assert.equal(response.statusCode, 502);
+  assert.equal(body.error, "proxy_error");
+  assert.equal(body.message, "NTS business upstream request failed.");
+  assert.equal(bodyText.includes("super-secret-data-go-key"), false);
+  assert.equal(bodyText.includes("serviceKey"), false);
 });
 
 test("health endpoint stays public and reports auth/upstream status", async (t) => {

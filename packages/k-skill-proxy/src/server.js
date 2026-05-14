@@ -22,6 +22,11 @@ const {
 const { fetchTransactions, VALID_ASSET_TYPES, VALID_DEAL_TYPES } = require("./molit");
 const { fetchNaverNewsSearch, normalizeNaverNewsSearchQuery } = require("./naver-news");
 const { fetchNaverShoppingSearch, normalizeNaverShoppingSearchQuery } = require("./naver-shopping");
+const {
+  normalizeNtsBusinessStatusQuery,
+  normalizeNtsBusinessValidateQuery,
+  proxyNtsBusinessRequest
+} = require("./nts-business");
 const { fetchNearbyParkingLots } = require("./parking-lots");
 const { searchRegionCode } = require("./region-lookup");
 const { resolveEducationOfficeFromNaturalLanguage } = require("./neis-office-codes");
@@ -1560,7 +1565,8 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         kosisConfigured: Boolean(config.kosisApiKey),
         naverShoppingConfigured: true,
         naverSearchApiConfigured: naverSearchKeysPresent,
-        naverNewsApiConfigured: naverSearchKeysPresent
+        naverNewsApiConfigured: naverSearchKeysPresent,
+        ntsBusinessConfigured: Boolean(config.molitApiKey)
       },
       auth: {
         tokenRequired: false
@@ -2634,6 +2640,203 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
     cache.set(cacheKey, payload, config.cacheTtlMs);
     return payload;
   });
+
+
+  function getNtsUpstreamStatusCode(parsed) {
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return parsed.status_code
+      ?? parsed.statusCode
+      ?? parsed.resultCode
+      ?? parsed.response?.header?.resultCode
+      ?? null;
+  }
+
+  function isNtsUpstreamSemanticFailure(parsed) {
+    const statusCode = getNtsUpstreamStatusCode(parsed);
+    if (statusCode === null || statusCode === undefined) {
+      return false;
+    }
+
+    return !["OK", "00", "0", "SUCCESS"].includes(String(statusCode).toUpperCase());
+  }
+
+  const ntsValidateSensitiveResponseKeys = new Set([
+    "b_adr",
+    "b_nm",
+    "b_sector",
+    "b_type",
+    "corp_no",
+    "p_nm",
+    "p_nm2",
+    "start_dt"
+  ]);
+
+  function redactNtsBusinessValidateResponse(value) {
+    if (Array.isArray(value)) {
+      return value.map(redactNtsBusinessValidateResponse);
+    }
+    if (!value || typeof value !== "object") {
+      return value;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !ntsValidateSensitiveResponseKeys.has(key))
+        .map(([key, entryValue]) => [key, redactNtsBusinessValidateResponse(entryValue)])
+    );
+  }
+
+  async function handleNtsBusinessRoute({
+    operation,
+    route,
+    normalizer,
+    request,
+    reply,
+    cacheSuccess = true,
+    includeQuery = true,
+    responseMapper = (body) => body
+  }) {
+    let normalized;
+
+    try {
+      normalized = normalizer(request.body || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = cacheSuccess
+      ? makeCacheKey({
+        route,
+        ...normalized
+      })
+      : null;
+    if (cacheKey) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        return {
+          ...cached,
+          proxy: {
+            ...cached.proxy,
+            cache: {
+              hit: true,
+              ttl_ms: config.cacheTtlMs
+            }
+          }
+        };
+      }
+    }
+
+    let upstream;
+    try {
+      upstream = await proxyNtsBusinessRequest({
+        operation,
+        payload: normalized,
+        serviceKey: config.molitApiKey
+      });
+    } catch (error) {
+      reply.code(502);
+      return {
+        error: "proxy_error",
+        message: "NTS business upstream request failed.",
+        proxy: {
+          name: config.proxyName,
+          cache: {
+            hit: false,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(upstream.body);
+    } catch {
+      reply.code(upstream.statusCode >= 400 ? upstream.statusCode : 502);
+      return {
+        error: "upstream_invalid_response",
+        message: "NTS business upstream did not return valid JSON.",
+        upstream_status: upstream.statusCode,
+        proxy: {
+          name: config.proxyName,
+          cache: {
+            hit: false,
+            ttl_ms: config.cacheTtlMs
+          }
+        }
+      };
+    }
+
+    const responseBody = responseMapper(parsed);
+
+    if (
+      upstream.statusCode < 200
+      || upstream.statusCode >= 300
+      || parsed.error
+      || isNtsUpstreamSemanticFailure(parsed)
+    ) {
+      reply.code(upstream.statusCode >= 400 ? upstream.statusCode : 502);
+      return {
+        ...responseBody,
+        error: parsed.error || "upstream_error",
+        upstream_status_code: getNtsUpstreamStatusCode(parsed) || undefined,
+        proxy: {
+          name: config.proxyName,
+          cache: {
+            hit: false,
+            ttl_ms: config.cacheTtlMs
+          },
+          requested_at: new Date().toISOString()
+        }
+      };
+    }
+
+    const payload = {
+      ...responseBody,
+      proxy: {
+        name: config.proxyName,
+        cache: {
+          hit: false,
+          ttl_ms: config.cacheTtlMs
+        },
+        requested_at: new Date().toISOString()
+      }
+    };
+    if (includeQuery) {
+      payload.query = normalized;
+    }
+
+    if (cacheKey) {
+      cache.set(cacheKey, payload, config.cacheTtlMs);
+    }
+    return payload;
+  }
+
+  app.post("/v1/nts-business/status", async (request, reply) => handleNtsBusinessRoute({
+    operation: "status",
+    route: "nts-business-status",
+    normalizer: normalizeNtsBusinessStatusQuery,
+    request,
+    reply
+  }));
+
+  app.post("/v1/nts-business/validate", async (request, reply) => handleNtsBusinessRoute({
+    operation: "validate",
+    route: "nts-business-validate",
+    normalizer: normalizeNtsBusinessValidateQuery,
+    cacheSuccess: false,
+    includeQuery: false,
+    responseMapper: redactNtsBusinessValidateResponse,
+    request,
+    reply
+  }));
 
   app.get("/v1/mfds/drug-safety/lookup", async (request, reply) => {
     let normalized;
@@ -3850,6 +4053,8 @@ module.exports = {
   normalizeNeisSchoolMealQuery,
   normalizeNeisSchoolSearchQuery,
   normalizeNaverShoppingSearchQuery,
+  normalizeNtsBusinessStatusQuery,
+  normalizeNtsBusinessValidateQuery,
   normalizeParkingLotSearchQuery,
   normalizeRealEstateQuery,
   normalizeRegionCodeQuery,
