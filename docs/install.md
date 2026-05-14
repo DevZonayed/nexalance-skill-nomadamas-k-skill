@@ -66,6 +66,7 @@ npx --yes skills add <owner/repo> \
   --skill real-estate-search \
   --skill korean-scholarship-search \
   --skill korean-stock-search \
+  --skill daishin-report-search \
   --skill household-waste-info \
   --skill mfds-drug-safety \
   --skill mfds-food-safety \
