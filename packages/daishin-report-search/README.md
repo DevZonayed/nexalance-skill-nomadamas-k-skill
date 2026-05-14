@@ -9,10 +9,12 @@ const { listReports, fetchReport } = require("daishin-report-search")
 
 const latest = await listReports({ limit: 10 })
 const filtered = await listReports({ query: "반도체", limit: 5, maxInspect: 100 })
+const authenticated = await listReports({ githubToken: process.env.GITHUB_TOKEN })
 const detail = await fetchReport("20260511082352", { includeExplain: true })
 ```
 
 ```bash
+GITHUB_TOKEN=... daishin-report-search --limit 10
 daishin-report-search --limit 10
 daishin-report-search 반도체 --limit 5 --max-inspect 100
 daishin-report-search --id 20260511082352 --include-explain
@@ -31,4 +33,6 @@ No API key or proxy is required.
 - `limit` is normalized to a positive integer with a maximum of 50 results.
 - `maxInspect` is normalized to a positive integer with a maximum of 500 latest pages to avoid excessive raw GitHub fetches.
 - Invalid, zero, negative, or non-finite numeric options fall back to documented defaults.
+- Latest/search discovery returns an empty result with `source.error` metadata instead of throwing when the GitHub tree API is blocked or rate-limited.
+- Optional `githubToken` and `githubHeaders` options are forwarded to GitHub requests. The CLI also honors `DAISHIN_GITHUB_TOKEN` or `GITHUB_TOKEN` from the environment.
 - The mirror can contain timestamped pages from sources other than Daishin Securities; inspect the returned title/headings/page URL before treating a result as Daishin-authored.

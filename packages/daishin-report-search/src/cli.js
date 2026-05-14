@@ -33,6 +33,7 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log(`Usage: daishin-report-search [query] [options]\n\nList latest reports:\n  daishin-report-search --limit 10\n  daishin-report-search 반도체 --limit 5 --max-inspect 100\n\nFetch one report:\n  daishin-report-search --id 20260511082352 --include-explain\n\nOptions:\n  -q, --query <text>     Filter by title/headings/detail text\n  --limit <number>      Maximum list results (default: 10)\n  --max-inspect <n>     Maximum latest pages to inspect for query matching\n  --id <timestamp>      Fetch one YYYYMMDDHHMMSS report\n  --include-explain     Fetch companion *_explain.html page for --id\n  --include-html         Include raw HTML in JSON output\n`)
+  console.log("Environment:\n  DAISHIN_GITHUB_TOKEN or GITHUB_TOKEN  Optional caller-owned GitHub token for higher API limits\n")
 }
 
 function run() {

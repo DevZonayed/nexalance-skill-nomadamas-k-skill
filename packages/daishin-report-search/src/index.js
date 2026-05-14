@@ -30,7 +30,19 @@ async function listReports(options = {}) {
   const inspectBudget = Math.max(normalizedLimit, normalizedMaxInspect)
   const warnings = []
 
-  const tree = await fetchJson(fetcher, TREE_URL)
+  let tree
+  try {
+    tree = await fetchJson(fetcher, TREE_URL, options)
+  } catch (error) {
+    warnings.push(`GitHub tree discovery failed: ${error.message}`)
+    return {
+      query: normalizedQuery,
+      count: 0,
+      items: [],
+      warnings,
+      source: buildSource(0, 0, error)
+    }
+  }
   if (tree.truncated) warnings.push("github tree response was truncated; latest report list may be incomplete")
 
   const paths = Array.isArray(tree.tree)
@@ -47,7 +59,7 @@ async function listReports(options = {}) {
     }
 
     try {
-      const html = await fetchText(fetcher, item.rawUrl)
+      const html = await fetchText(fetcher, item.rawUrl, options)
       const parsed = parseReportHtml(html)
       item = {
         ...item,
@@ -75,14 +87,7 @@ async function listReports(options = {}) {
     count: items.length,
     items,
     warnings,
-    source: {
-      treeUrl: TREE_URL,
-      pagesBaseUrl: PAGES_BASE_URL,
-      rawBaseUrl: RAW_BASE_URL,
-      branch: BRANCH,
-      totalReportsDiscovered: candidates.length,
-      inspectedReports: Math.min(candidates.length, inspectBudget)
-    }
+    source: buildSource(candidates.length, Math.min(candidates.length, inspectBudget))
   }
 }
 
@@ -95,7 +100,7 @@ async function fetchReport(idOrPath, options = {}) {
   if (!meta || meta.isExplain) throw new Error(`invalid report id or path: ${idOrPath}`)
 
   const urls = buildReportUrls(path)
-  const html = await fetchText(fetcher, urls.rawUrl)
+  const html = await fetchText(fetcher, urls.rawUrl, options)
   const parsed = parseReportHtml(html)
   const report = {
     ...meta,
@@ -112,7 +117,7 @@ async function fetchReport(idOrPath, options = {}) {
     const explainPath = `${meta.id}_explain.html`
     const explainUrls = buildReportUrls(explainPath)
     try {
-      const explainHtml = await fetchText(fetcher, explainUrls.rawUrl)
+      const explainHtml = await fetchText(fetcher, explainUrls.rawUrl, options)
       const explainParsed = parseReportHtml(explainHtml)
       report.explain = {
         ...parseTimestamp(explainPath),
@@ -241,30 +246,90 @@ function matchesQuery(item, query) {
   return query.toLocaleLowerCase("ko-KR").split(/\s+/).filter(Boolean).every((term) => haystack.includes(term))
 }
 
-async function fetchJson(fetcher, url) {
-  const response = await fetcher(url, { headers: requestHeaders() })
+async function fetchJson(fetcher, url, options = {}) {
+  const response = await fetcher(url, { headers: requestHeaders(options) })
   await assertOk(response, url)
   if (typeof response.json === "function") return response.json()
   return JSON.parse(await response.text())
 }
 
-async function fetchText(fetcher, url) {
-  const response = await fetcher(url, { headers: requestHeaders() })
+async function fetchText(fetcher, url, options = {}) {
+  const response = await fetcher(url, { headers: requestHeaders(options) })
   await assertOk(response, url)
   return response.text()
 }
 
 async function assertOk(response, url) {
   if (response && response.ok) return
-  const status = response ? `${response.status || ""} ${response.statusText || ""}`.trim() : "no response"
-  throw new Error(`HTTP ${status} for ${url}`)
+  const statusCode = response && response.status
+  const statusText = response && response.statusText
+  const status = response ? `${statusCode || ""} ${statusText || ""}`.trim() : "no response"
+  const error = new Error(`HTTP ${status} for ${url}`)
+  error.url = url
+  error.status = statusCode || null
+  error.statusText = statusText || ""
+  error.kind = statusCode === 403 || statusCode === 429 ? "rate_limit" : "http"
+  error.rateLimit = readRateLimit(response && response.headers)
+  throw error
 }
 
-function requestHeaders() {
-  return {
+function requestHeaders(options = {}) {
+  const headers = {
     "user-agent": "k-skill daishin-report-search (+https://github.com/NomaDamas/k-skill)",
     accept: "application/vnd.github+json, text/html;q=0.9, */*;q=0.8"
   }
+  Object.assign(headers, options.githubHeaders || {})
+  const token = options.githubToken || readEnvToken()
+  if (token && !hasHeader(headers, "authorization")) headers.authorization = `Bearer ${token}`
+  return headers
+}
+
+function buildSource(totalReportsDiscovered, inspectedReports, error) {
+  const source = {
+    treeUrl: TREE_URL,
+    pagesBaseUrl: PAGES_BASE_URL,
+    rawBaseUrl: RAW_BASE_URL,
+    branch: BRANCH,
+    totalReportsDiscovered,
+    inspectedReports
+  }
+  if (error) source.error = serializeSourceError(error)
+  return source
+}
+
+function serializeSourceError(error) {
+  return {
+    message: error.message,
+    url: error.url || TREE_URL,
+    status: error.status || null,
+    statusText: error.statusText || "",
+    kind: error.kind || "unknown",
+    rateLimit: error.rateLimit || {}
+  }
+}
+
+function readRateLimit(headers) {
+  if (!headers || typeof headers.get !== "function") return {}
+  const reset = headers.get("x-ratelimit-reset")
+  const retryAfter = headers.get("retry-after")
+  const rateLimit = {
+    limit: headers.get("x-ratelimit-limit") || "",
+    remaining: headers.get("x-ratelimit-remaining") || "",
+    reset: reset || "",
+    retryAfter: retryAfter || ""
+  }
+  if (reset && /^\d+$/.test(reset)) rateLimit.resetAt = new Date(Number(reset) * 1000).toISOString()
+  return rateLimit
+}
+
+function readEnvToken() {
+  if (typeof process === "undefined" || !process.env) return ""
+  return process.env.DAISHIN_GITHUB_TOKEN || process.env.GITHUB_TOKEN || ""
+}
+
+function hasHeader(headers, name) {
+  const normalized = name.toLowerCase()
+  return Object.keys(headers).some((key) => key.toLowerCase() === normalized)
 }
 
 function normalizeReportPath(idOrPath) {

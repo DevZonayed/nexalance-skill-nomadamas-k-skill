@@ -57,7 +57,8 @@ const { listReports } = require("daishin-report-search")
 const result = await listReports({
   limit: 10,
   query: "반도체",   // optional; matches title/headings/detail text
-  maxInspect: 100    // optional query crawl budget among newest pages
+  maxInspect: 100,   // optional query crawl budget among newest pages
+  githubToken: process.env.GITHUB_TOKEN // optional; raises GitHub API limits when caller has one
 })
 
 console.log(result.items)
@@ -122,6 +123,7 @@ Always state that the timestamp is filename-derived and that report contents can
 2. If a query is present, inspect newer candidates up to `maxInspect` until enough matches are found or the budget is exhausted; return a warning if the budget is exhausted.
 3. For a known id, fetch raw detail directly. If explanation is requested, fetch `<id>_explain.html`; if absent, return the original report plus a warning.
 4. If the tree endpoint is truncated, blocked, rate-limited, or changed, report that as a source warning/failure instead of guessing hidden pages.
+5. If the caller has authenticated GitHub access, pass `githubToken` / `githubHeaders` in library calls or set `DAISHIN_GITHUB_TOKEN` / `GITHUB_TOKEN` for the CLI; do not require or proxy a token by default.
 
 ## Done when
 
@@ -132,7 +134,7 @@ Always state that the timestamp is filename-derived and that report contents can
 
 ## Failure modes
 
-- GitHub unauthenticated API rate limits can return 403/429; retry later or use authenticated GitHub access outside this skill if appropriate.
+- GitHub unauthenticated API rate limits can return 403/429; latest/search returns empty `items` plus `source.error.kind = "rate_limit"` and rate-limit reset metadata when GitHub exposes it. Retry later or use caller-supplied authenticated GitHub access if appropriate.
 - The repository path or branch can change; then tree/raw URLs will fail.
 - The tree response could become truncated; in that case the latest-list completeness is not guaranteed.
 - HTML structure can change; title/headings/table extraction may be partial, but URLs and raw text fallback should still be returned when available.
@@ -142,4 +144,4 @@ Always state that the timestamp is filename-derived and that report contents can
 
 - Read-only lookup only; no login, trading, order placement, recommendation, or investment advice.
 - Do not scrape private Daishin services or bypass CAPTCHA/login walls.
-- No secrets or API keys are required.
+- No secrets or API keys are required. Optional GitHub tokens are caller-owned and used only when explicitly supplied via options or environment.

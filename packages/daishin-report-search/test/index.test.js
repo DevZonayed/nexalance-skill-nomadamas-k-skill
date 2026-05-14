@@ -13,12 +13,18 @@ const { parseArgs } = require("../src/cli")
 
 const TREE_URL = "https://api.github.com/repos/jay-jo-0/github_pages_repo/git/trees/main?recursive=1"
 
-function jsonResponse(value, ok = true) {
+function jsonResponse(value, ok = true, responseOptions = {}) {
+  const headers = responseOptions.headers || {}
+  const getHeader = (name) => {
+    const normalized = String(name).toLowerCase()
+    if (headers[normalized]) return headers[normalized]
+    return normalized === "content-type" && ok ? "application/json" : null
+  }
   return {
     ok,
-    status: ok ? 200 : 500,
-    statusText: ok ? "OK" : "Server Error",
-    headers: { get: () => "application/json" },
+    status: responseOptions.status || (ok ? 200 : 500),
+    statusText: responseOptions.statusText || (ok ? "OK" : "Server Error"),
+    headers: { get: getHeader },
     text: async () => JSON.stringify(value),
     json: async () => value
   }
@@ -198,6 +204,80 @@ test("parseReportHtml preserves malformed numeric entities instead of throwing",
   assert.match(parsed.title, /&#x110000;/)
   assert.match(parsed.title, /A A/)
   assert.match(parsed.text, /본문/)
+})
+
+test("listReports returns structured source errors for GitHub tree rate limits", async () => {
+  const reset = String(Math.floor(Date.parse("2026-05-14T01:00:00Z") / 1000))
+  const fetcher = async (url) => {
+    assert.equal(url, TREE_URL)
+    return jsonResponse(
+      { message: "API rate limit exceeded" },
+      false,
+      {
+        status: 403,
+        statusText: "rate limit exceeded",
+        headers: {
+          "x-ratelimit-limit": "60",
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": reset
+        }
+      }
+    )
+  }
+
+  const result = await listReports({ limit: 3, fetcher })
+
+  assert.equal(result.count, 0)
+  assert.deepEqual(result.items, [])
+  assert.equal(result.source.totalReportsDiscovered, 0)
+  assert.equal(result.source.inspectedReports, 0)
+  assert.equal(result.source.error.status, 403)
+  assert.equal(result.source.error.kind, "rate_limit")
+  assert.equal(result.source.error.rateLimit.limit, "60")
+  assert.equal(result.source.error.rateLimit.remaining, "0")
+  assert.equal(result.source.error.rateLimit.reset, reset)
+  assert.equal(result.source.error.rateLimit.resetAt, "2026-05-14T01:00:00.000Z")
+  assert.match(result.warnings[0], /GitHub tree discovery failed: HTTP 403 rate limit exceeded/)
+})
+
+test("listReports classifies GitHub 429 responses as structured rate limits", async () => {
+  const fetcher = async () => jsonResponse(
+    { message: "Too Many Requests" },
+    false,
+    {
+      status: 429,
+      statusText: "Too Many Requests",
+      headers: { "retry-after": "42" }
+    }
+  )
+
+  const result = await listReports({ limit: 1, fetcher })
+
+  assert.equal(result.count, 0)
+  assert.equal(result.source.error.status, 429)
+  assert.equal(result.source.error.kind, "rate_limit")
+  assert.equal(result.source.error.rateLimit.retryAfter, "42")
+  assert.match(result.warnings[0], /GitHub tree discovery failed: HTTP 429 Too Many Requests/)
+})
+
+test("listReports sends caller GitHub headers and token to discovery requests", async () => {
+  const calls = []
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url, headers: init.headers })
+    if (url === TREE_URL) return jsonResponse({ tree: [{ path: "20260511082352.html", type: "blob" }] })
+    return textResponse("<h1>헤더 테스트</h1><p>본문</p>")
+  }
+
+  const result = await listReports({
+    limit: 1,
+    githubToken: "test-token",
+    githubHeaders: { "x-github-api-version": "2022-11-28" },
+    fetcher
+  })
+
+  assert.equal(result.items.length, 1)
+  assert.equal(calls[0].headers.authorization, "Bearer test-token")
+  assert.equal(calls[0].headers["x-github-api-version"], "2022-11-28")
 })
 
 test("fetchReport returns detail plus optional explanation page", async () => {
