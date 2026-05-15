@@ -266,7 +266,7 @@ function statusMatches(itemStatus, requestedStatus) {
 }
 
 function parseListRows(html, options = {}) {
-  const normalized = options.category ? options : normalizeSearchOptions(options)
+  const normalized = normalizeSearchOptions(options)
   const config = CATEGORY_CONFIGS[normalized.category]
   const listAreaMatch = String(html || "").match(/<div\b[^>]*id=["']listTb["'][^>]*>[\s\S]*?<tbody[^>]*>([\s\S]*?)<\/tbody>[\s\S]*?<\/div>/i)
   const tbodyMatch = listAreaMatch || String(html || "").match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i)
@@ -310,7 +310,7 @@ function parseNumberOrNull(value) {
 }
 
 function parseListHtml(html, options = {}) {
-  const normalized = options.category ? options : normalizeSearchOptions(options)
+  const normalized = normalizeSearchOptions(options)
   const items = parseListRows(html, normalized).slice(0, normalized.pageSize)
   const result = {
     query: {
@@ -404,7 +404,7 @@ function extractDepartment(html) {
 }
 
 function parseDetailHtml(html, options = {}) {
-  const normalized = options.seq ? options : normalizeDetailOptions(options)
+  const normalized = normalizeDetailOptions(options)
   const config = CATEGORY_CONFIGS[normalized.category]
   const titleMatch = String(html || "").match(/<div\b[^>]*class=["'][^"']*detailTable[^"']*firgs0401Table[^"']*["'][^>]*>[\s\S]*?<caption>([\s\S]*?)<\/caption>/i) ||
     String(html || "").match(/<thead>[\s\S]*?<th\b[^>]*colspan=["']2["'][^>]*>([\s\S]*?)<\/th>/i)

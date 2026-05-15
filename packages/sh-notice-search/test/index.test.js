@@ -134,6 +134,19 @@ test("parseListHtml returns rows, total count, category, and detail URLs", () =>
   assert.match(result.items[0].detail_url, /www\.i-sh\.co\.kr/)
 })
 
+test("parseListHtml normalizes public helper inputs before parsing", () => {
+  const result = parseListHtml(LIST_HTML, { keyword: "행복주택", category: "임대", page: 1 })
+
+  assert.equal(result.query.category, "rent")
+  assert.equal(result.query.category_name, "주택임대")
+  assert.equal(result.query.srch_tp, "0")
+  assert.equal(result.summary.page, 1)
+  assert.equal(result.summary.page_size, 10)
+  assert.equal(result.items[0].category, "rent")
+  assert.equal(result.items[0].category_name, "주택임대")
+  assert.match(result.source.url, /srchTp=0/)
+})
+
 test("parseListHtml applies conservative status filtering after parsing", () => {
   const closed = parseListHtml(LIST_HTML, normalizeSearchOptions({ status: "closed" }))
   const open = parseListHtml(LIST_HTML, normalizeSearchOptions({ status: "open" }))
@@ -141,6 +154,16 @@ test("parseListHtml applies conservative status filtering after parsing", () => 
   assert.equal(closed.items.length, 1)
   assert.match(closed.items[0].title, /계약결과/)
   assert.equal(open.items.length, 0)
+})
+
+test("parseDetailHtml normalizes public helper inputs before parsing", () => {
+  const detail = parseDetailHtml(DETAIL_HTML, { seq: "304371", category: "임대" })
+
+  assert.equal(detail.seq, "304371")
+  assert.equal(detail.category, "rent")
+  assert.equal(detail.category_name, "주택임대")
+  assert.equal(detail.attachments.length, 2)
+  assert.match(detail.detail_url, /multi_itm_seq=2/)
 })
 
 test("parseDetailHtml extracts real attachments by existFile onclick, not icon templates", () => {
