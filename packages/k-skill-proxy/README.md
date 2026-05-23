@@ -25,6 +25,11 @@
 - `GET /v1/korean-stock/base-info`
 - `GET /v1/korean-stock/trade-info`
 - `GET /v1/kakao-local/geocode` — Kakao Local 주소/장소명 지오코딩(`KAKAO_REST_API_KEY`; caller `apiKey` 무시)
+- `GET /v1/kakao-map/search/keyword` — Kakao Local 키워드 장소 검색(좌표 중심·반경·카테고리 필터 지원, `KAKAO_REST_API_KEY`)
+- `GET /v1/kakao-map/search/category` — Kakao Local 카테고리 장소 검색(좌표 중심 필수, `KAKAO_REST_API_KEY`)
+- `GET /v1/kakao-map/coord2address` — Kakao Local 좌표→도로명/지번 주소(`KAKAO_REST_API_KEY`)
+- `GET /v1/kakao-map/coord2region` — Kakao Local 좌표→행정구역(`KAKAO_REST_API_KEY`)
+- `GET /v1/kakao-mobility/directions` — Kakao Mobility 자동차 길찾기(`KAKAO_REST_API_KEY`)
 - `GET /v1/kosis/search` — KOSIS 통계표 검색(`KOSIS_API_KEY`)
 - `GET /v1/kosis/meta` — KOSIS 통계표 메타데이터(`KOSIS_API_KEY`)
 - `GET /v1/kosis/data` — KOSIS 통계 데이터 셀 조회(`KOSIS_API_KEY`)
