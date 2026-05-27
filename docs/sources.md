@@ -180,3 +180,25 @@
 - 도서관 정보나루 도서 상세 endpoint: https://data4library.kr/api/srchDtlList
 - 도서관 정보나루 도서 소장 도서관 endpoint: https://data4library.kr/api/libSrchByBook
 - 도서관 정보나루 도서관별 도서 소장여부 endpoint: https://data4library.kr/api/bookExist
+
+
+## startup-support
+
+### 공공데이터포털 (data.go.kr)
+- **기관**: 중소벤처기업부
+- **서비스명**: 스타트업 지원사업 정보
+- **API URL**: https://www.data.go.kr/api/15058530/openapi
+- **인증**: API 키 필수 (DATA_GO_KR_API_KEY)
+
+### 지자체별 공식 사이트
+- **서울시 창업플러스**: https://seoulstartup.go.kr
+- **경기도 창업진흥원**: https://g-startup.kr
+- **부산시 스타트업 허브**: https://busanstartup.kr
+- **광주창업파크**: https://startup.gwangju.kr
+- **대구창업진흥원**: https://daegu-startup.kr
+
+### 공기업 및 기금 관리기관
+- **중소기업진흥공단**: https://smbs.or.kr
+- **기술보증기금**: https://koreatech.or.kr
+- **KOTRA**: https://www.kotra.or.kr
+- **중소벤처기업금융공단**: https://www.sbc.or.kr

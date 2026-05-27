@@ -375,3 +375,29 @@ node scripts/korean_character_count.js --text $'첫 줄\n둘째 줄🙂' --profi
 
 - [공통 설정 가이드](setup.md)
 - [보안/시크릿 정책](security-and-secrets.md)
+
+
+
+### startup-support
+
+startup-support 스킬은 다음과 같은 환경이 필요합니다:
+
+#### 환경 변수
+```bash
+export DATA_GO_KR_API_KEY="your_api_key_here"
+```
+
+#### 의존성
+- Python 3.7+
+- requests 라이브러리
+- datetime 라이브러리
+
+#### 설치
+```bash
+# 스킬 설치
+cd startup-support
+pip install requests
+
+# 테스트 실행
+python3 scripts/test_startup_support.py
+```
