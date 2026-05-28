@@ -335,6 +335,20 @@ class KtxBookingTests(unittest.TestCase):
         self.assertTrue(any(path in ktx_booking.KORAIL_CARS_INFO for path in ktx_booking.DYNAPATH_PATHS))
         self.assertTrue(any(path in ktx_booking.KORAIL_CAR_DETAIL for path in ktx_booking.DYNAPATH_PATHS))
 
+    def test_seat_lookup_payload_rejects_missing_context_fields(self):
+        client = object.__new__(ktx_booking.PatchedKorail)
+        client._device = "AD"
+        client._version = "240906001"
+        client._key = "session-key"
+
+        with self.assertRaises(ktx_booking.KorailError) as exc:
+            client._seat_lookup_payload({"h_trn_no": "009", "h_dpt_dt": "20260328"}, 1, "1")
+
+        message = str(exc.exception)
+        self.assertIn("seat lookup context missing", message)
+        self.assertIn("h_arv_rs_stn_cd", message)
+        self.assertIn("h_trn_gp_cd", message)
+
     def test_command_search_replays_selected_train_type(self):
         selected = FakeTrain(
             train_no="2080",
