@@ -136,6 +136,26 @@ DYNAPATH_PATHS = [
 ]
 KORAIL_CARS_INFO = "https://smart.letskorail.com:443/classes/com.korail.mobile.research.TrainResearch"
 KORAIL_CAR_DETAIL = "https://smart.letskorail.com:443/classes/com.korail.mobile.research.ResidualSeatsResearch.do"
+SEAT_LOOKUP_FIELD_MAP = {
+    "h_arv_rs_stn_cd": "txtArvRsStnCd",
+    "h_arv_stn_run_ordr": "txtArvStnRunOrdr",
+    "h_dpt_dt": "txtDptDt",
+    "h_dpt_rs_stn_cd": "txtDptRsStnCd",
+    "h_dpt_stn_run_ordr": "txtDptStnRunOrdr",
+    "h_run_dt": "txtRunDt",
+    "h_trn_clsf_cd": "txtTrnClsfCd",
+    "h_trn_gp_cd": "txtTrnGpCd",
+    "h_trn_no": "txtTrnNo",
+}
+
+
+def make_korail_error(message: str, code: str = "KSKILL") -> KorailError:
+    try:
+        return KorailError(message, code)
+    except TypeError:
+        return KorailError(message)
+
+
 RESERVE_OPTION_MAP = {
     "general-first": ReserveOption.GENERAL_FIRST,
     "general-only": ReserveOption.GENERAL_ONLY,
@@ -538,25 +558,30 @@ class PatchedKorail(Korail):
         return {}
 
     def _seat_lookup_payload(self, raw_train: dict[str, object], passenger_count: int, room_class: str) -> dict[str, object]:
-        return {
+        missing_fields = [field for field in SEAT_LOOKUP_FIELD_MAP if not str(raw_train.get(field, ""))]
+        if missing_fields:
+            raise make_korail_error(
+                "seat lookup context missing "
+                + ", ".join(missing_fields)
+                + "; refresh train search details before requesting seats",
+                "KSKILL_SEAT_CONTEXT",
+            )
+
+        payload = {
+            payload_name: str(raw_train[field])
+            for field, payload_name in SEAT_LOOKUP_FIELD_MAP.items()
+        }
+        payload.update({
             "Device": self._device,
             "Version": self._version,
             "Key": self._key,
-            "txtArvRsStnCd": raw_train.get("h_arv_rs_stn_cd", ""),
-            "txtArvStnRunOrdr": raw_train.get("h_arv_stn_run_ordr", ""),
-            "txtDptDt": raw_train.get("h_dpt_dt", ""),
-            "txtDptRsStnCd": raw_train.get("h_dpt_rs_stn_cd", ""),
-            "txtDptStnRunOrdr": raw_train.get("h_dpt_stn_run_ordr", ""),
             "txtGdNo": "",
             "txtMenuId": "11",
             "txtPsrmClCd": room_class,
-            "txtRunDt": raw_train.get("h_run_dt", ""),
             "txtSeatAttCd": "015",
             "txtTotPsgCnt": str(passenger_count),
-            "txtTrnClsfCd": raw_train.get("h_trn_clsf_cd", ""),
-            "txtTrnGpCd": raw_train.get("h_trn_gp_cd", ""),
-            "txtTrnNo": raw_train.get("h_trn_no", ""),
-        }
+        })
+        return payload
 
     def reserve(self, train, passengers=None, option=ReserveOption.GENERAL_FIRST, try_waiting=False):
         reserving_seat = True
