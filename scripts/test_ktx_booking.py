@@ -547,8 +547,8 @@ class KtxBookingTests(unittest.TestCase):
         self.assertEqual(len(result["cars"]), 1)
         self.assertEqual(result["cars"][0]["car_no"], 5)
         self.assertEqual(result["cars"][0]["remaining_seats"], 3)
-        self.assertEqual(result["cars"][0]["available_seat_count"], 2)
-        self.assertEqual(result["cars"][0]["available_seats"], ["1A", "2A"])
+        self.assertEqual(result["cars"][0]["available_seat_count"], 1)
+        self.assertEqual(result["cars"][0]["available_seats"], ["1A"])
         self.assertEqual(result["cars"][0]["shown_seat_count"], 1)
         self.assertEqual(result["cars"][0]["seats"][0]["seat"], "1A")
         self.assertEqual(result["cars"][0]["seats"][0]["power_outlet"], "direct")
@@ -673,6 +673,63 @@ class KtxBookingTests(unittest.TestCase):
         self.assertEqual(car["available_seats"], ["3A", "1A", "1C", "2A"])
         self.assertEqual([seat["seat"] for seat in car["seats"]], ["3A", "1A", "1C", "2A"])
 
+    def test_command_seats_available_summary_matches_power_filter(self):
+        selected = FakeTrain(train_no="009", dep_time="090000", arr_time="113000", label="selected")
+        raw_train = {"h_trn_no": "009", "h_dpt_dt": "20260328"}
+        train_id = ktx_booking.normalize_train(selected, index=1)["train_id"]
+        client = FakeClient(
+            [],
+            train_details=[(selected, raw_train)],
+            cars=[{"h_srcar_no": "05", "h_psrm_cl_cd": "1", "h_seat_cnt": "48", "h_rest_seat_cnt": "4"}],
+            seats_by_car={
+                "05": [
+                    {
+                        "h_con_seat_no": "1A",
+                        "h_seat_no": "001001",
+                        "h_sale_psb_flg": "Y",
+                        "h_for_rev_dir_dv": "009",
+                        "h_sigl_win_in_dv": "012",
+                        "h_dmd_seat_att": "015",
+                    },
+                    {
+                        "h_con_seat_no": "2C",
+                        "h_seat_no": "002003",
+                        "h_sale_psb_flg": "Y",
+                        "h_for_rev_dir_dv": "009",
+                        "h_sigl_win_in_dv": "013",
+                        "h_dmd_seat_att": "015",
+                    },
+                ],
+            },
+        )
+        args = argparse.Namespace(
+            dep="서울",
+            arr="부산",
+            date="20260328",
+            time="090000",
+            adults=1,
+            children=0,
+            toddlers=0,
+            seniors=0,
+            train_id=train_id,
+            room="general",
+            train_type="ktx",
+            car_no=None,
+            available_only=True,
+            power_only=True,
+            limit=10,
+        )
+        output = io.StringIO()
+
+        with patch.object(ktx_booking, "build_client", return_value=client):
+            with redirect_stdout(output):
+                ktx_booking.command_seats(args)
+
+        car = json.loads(output.getvalue())["cars"][0]
+        self.assertEqual(car["available_seat_count"], 1)
+        self.assertEqual(car["available_seats"], ["1A"])
+        self.assertEqual([seat["seat"] for seat in car["seats"]], ["1A"])
+
     def test_command_seats_supports_special_room_and_stale_train_error(self):
         selected = FakeTrain(train_no="009", dep_time="090000", arr_time="113000", label="selected")
         train_id = ktx_booking.normalize_train(selected, index=1)["train_id"]
@@ -739,6 +796,39 @@ class KtxBookingTests(unittest.TestCase):
                     ktx_booking.command_seats(args)
 
         self.assertIn("car_no 5", str(exc.exception))
+
+    def test_command_seats_fails_when_car_data_is_unavailable(self):
+        selected = FakeTrain(train_no="009", dep_time="090000", arr_time="113000", label="selected")
+        train_id = ktx_booking.normalize_train(selected, index=1)["train_id"]
+        client = FakeClient(
+            [],
+            train_details=[(selected, {"h_trn_no": "009"})],
+            cars=[],
+        )
+        args = argparse.Namespace(
+            dep="서울",
+            arr="부산",
+            date="20260328",
+            time="090000",
+            adults=1,
+            children=0,
+            toddlers=0,
+            seniors=0,
+            train_id=train_id,
+            room="general",
+            train_type="ktx",
+            car_no=None,
+            available_only=False,
+            power_only=False,
+            limit=10,
+        )
+
+        with patch.object(ktx_booking, "build_client", return_value=client):
+            with self.assertRaises(SystemExit) as exc:
+                with redirect_stdout(io.StringIO()):
+                    ktx_booking.command_seats(args)
+
+        self.assertIn("seat car data is unavailable", str(exc.exception))
 
     def test_build_parser_has_ncard_commands(self):
         parser = ktx_booking.build_parser()

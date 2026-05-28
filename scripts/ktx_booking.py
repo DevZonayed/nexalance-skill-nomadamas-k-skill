@@ -915,6 +915,8 @@ def command_seats(args: argparse.Namespace) -> None:
     train, raw_train = match
     room_class = ROOM_CLASS_MAP[args.room]
     cars = [normalize_car(car) for car in client.train_cars(raw_train, passenger_count, room_class)]
+    if not cars:
+        raise SystemExit(f"seat car data is unavailable for {args.room}; retry search or choose another train")
     if args.car_no is not None:
         cars = [car for car in cars if car["car_no"] == args.car_no]
         if not cars:
@@ -929,12 +931,12 @@ def command_seats(args: argparse.Namespace) -> None:
         if isinstance(raw_seats, dict):
             raw_seats = [raw_seats]
         all_seats = [normalize_seat(seat) for seat in raw_seats if seat.get("h_con_seat_no") != "0A"]
-        available_seats = sort_seats_for_booking([seat for seat in all_seats if seat["available"]])
         seats = sort_seats_for_booking(all_seats)
         if args.available_only:
-            seats = available_seats
+            seats = [seat for seat in seats if seat["available"]]
         if args.power_only:
             seats = [seat for seat in seats if seat["power_outlet"] != "none"]
+        available_seats = [seat for seat in seats if seat["available"]]
         seats = seats[: args.limit]
         car_payload = dict(car)
         car_payload["available_seat_count"] = len(available_seats)
