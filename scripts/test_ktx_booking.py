@@ -349,6 +349,29 @@ class KtxBookingTests(unittest.TestCase):
         self.assertIn("h_arv_rs_stn_cd", message)
         self.assertIn("h_trn_gp_cd", message)
 
+    def test_seat_lookup_payload_rejects_none_and_blank_context_fields(self):
+        client = object.__new__(ktx_booking.PatchedKorail)
+        client._device = "AD"
+        client._version = "240906001"
+        client._key = "session-key"
+        raw_train: dict[str, object] = {
+            field: "context-value"
+            for field in ktx_booking.SEAT_LOOKUP_FIELD_MAP
+        }
+        bad_values: tuple[object, ...] = (None, "", "   ")
+
+        for bad_value in bad_values:
+            with self.subTest(bad_value=bad_value):
+                raw_train["h_trn_no"] = bad_value
+                with self.assertRaises(ktx_booking.KorailError) as exc:
+                    client._seat_lookup_payload(raw_train, 1, "1")
+
+                message = str(exc.exception)
+                self.assertIn("seat lookup context missing", message)
+                self.assertIn("h_trn_no", message)
+                self.assertNotIn("txtTrnNo", message)
+                raw_train["h_trn_no"] = "009"
+
     def test_command_search_replays_selected_train_type(self):
         selected = FakeTrain(
             train_no="2080",
@@ -541,8 +564,10 @@ class KtxBookingTests(unittest.TestCase):
         self.assertEqual(len(result["cars"]), 1)
         self.assertEqual(result["cars"][0]["car_no"], 5)
         self.assertEqual(result["cars"][0]["remaining_seats"], 3)
-        self.assertEqual(result["cars"][0]["available_seat_count"], 2)
-        self.assertEqual(result["cars"][0]["available_seats"], ["1A", "2A"])
+        self.assertEqual(result["cars"][0]["all_available_seat_count"], 2)
+        self.assertEqual(result["cars"][0]["all_available_seats"], ["1A", "2A"])
+        self.assertEqual(result["cars"][0]["available_seat_count"], 1)
+        self.assertEqual(result["cars"][0]["available_seats"], ["1A"])
         self.assertEqual(result["cars"][0]["shown_seat_count"], 1)
         self.assertEqual(result["cars"][0]["seats"][0]["seat"], "1A")
         self.assertEqual(result["cars"][0]["seats"][0]["power_outlet"], "direct")

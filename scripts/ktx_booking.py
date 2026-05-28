@@ -558,7 +558,19 @@ class PatchedKorail(Korail):
         return {}
 
     def _seat_lookup_payload(self, raw_train: dict[str, object], passenger_count: int, room_class: str) -> dict[str, object]:
-        missing_fields = [field for field in SEAT_LOOKUP_FIELD_MAP if not str(raw_train.get(field, ""))]
+        seat_context: dict[str, str] = {}
+        missing_fields: list[str] = []
+        for field, payload_name in SEAT_LOOKUP_FIELD_MAP.items():
+            value = raw_train.get(field)
+            if value is None:
+                missing_fields.append(field)
+                continue
+            normalized_value = str(value).strip()
+            if not normalized_value:
+                missing_fields.append(field)
+                continue
+            seat_context[payload_name] = normalized_value
+
         if missing_fields:
             raise make_korail_error(
                 "seat lookup context missing "
@@ -567,10 +579,7 @@ class PatchedKorail(Korail):
                 "KSKILL_SEAT_CONTEXT",
             )
 
-        payload = {
-            payload_name: str(raw_train[field])
-            for field, payload_name in SEAT_LOOKUP_FIELD_MAP.items()
-        }
+        payload: dict[str, object] = dict(seat_context)
         payload.update({
             "Device": self._device,
             "Version": self._version,
@@ -956,24 +965,28 @@ def command_seats(args: argparse.Namespace) -> None:
     car_payloads: list[dict[str, object]] = []
     for car in cars:
         raw = client.car_seats(raw_train, str(car["car_no_raw"]), passenger_count, room_class)
-        raw_seats, seat_lookup_error = extract_car_seat_rows(raw, int(car["remaining_seats"]))
+        remaining_seats = int(str(car["remaining_seats"]))
+        raw_seats, seat_lookup_error = extract_car_seat_rows(raw, remaining_seats)
         all_seats = [
             normalize_seat(seat)
             for seat in raw_seats
             if seat.get("h_con_seat_no") != "0A"
         ]
-        available_seats = [seat for seat in all_seats if seat["available"]]
-        seats = all_seats
+        all_available_seats = [seat for seat in all_seats if seat["available"]]
+        matching_seats = all_seats
         if args.available_only:
-            seats = available_seats
+            matching_seats = all_available_seats
         if args.power_only:
-            seats = [seat for seat in seats if seat["power_outlet"] != "none"]
-        seats = seats[: args.limit]
+            matching_seats = [seat for seat in matching_seats if seat["power_outlet"] != "none"]
+        matching_available_seats = [seat for seat in matching_seats if seat["available"]]
+        seats = matching_seats[: args.limit]
         car_payload = dict(car)
         if seat_lookup_error:
             car_payload["seat_lookup_error"] = seat_lookup_error
-        car_payload["available_seat_count"] = None if seat_lookup_error else len(available_seats)
-        car_payload["available_seats"] = [seat["seat"] for seat in available_seats]
+        car_payload["all_available_seat_count"] = None if seat_lookup_error else len(all_available_seats)
+        car_payload["all_available_seats"] = [seat["seat"] for seat in all_available_seats]
+        car_payload["available_seat_count"] = None if seat_lookup_error else len(matching_available_seats)
+        car_payload["available_seats"] = [seat["seat"] for seat in matching_available_seats]
         car_payload["shown_seat_count"] = len(seats)
         car_payload["seats"] = seats
         car_payloads.append(car_payload)

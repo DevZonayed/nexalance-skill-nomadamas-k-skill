@@ -159,7 +159,7 @@ python3 scripts/ktx_booking.py seats 남춘천 용산 20260503 150000 \
 상세 좌석 응답을 보여줄 때는 사용자 의도에 맞춰 아래를 우선 요약한다.
 
 - 호차별 `remaining_seats`, `available_seat_count`
-- 남은 좌석 번호 (`available_seats`)
+- 활성 필터에 맞는 남은 좌석 번호 (`available_seats`)와 필터 전 전체 잔여 좌석 번호 (`all_available_seats`)
 - 좌석별 `direction`, `position`, `seat_type`
 - 콘센트 힌트 (`power_outlet`)
 - 문 근처 여부 (`near_door`)
