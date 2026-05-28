@@ -799,6 +799,36 @@ def normalize_car(raw_car: dict[str, object]) -> dict[str, object]:
     }
 
 
+def extract_car_seat_rows(raw: object, remaining_seats: int) -> tuple[list[dict[str, object]], str | None]:
+    def malformed_error(reason: str) -> tuple[list[dict[str, object]], str | None]:
+        if remaining_seats > 0:
+            return [], f"malformed seat detail response: {reason}"
+        return [], None
+
+    if not isinstance(raw, dict):
+        return malformed_error("payload is not an object")
+
+    seat_infos = raw.get("seat_infos")
+    if not isinstance(seat_infos, dict):
+        return malformed_error("seat_infos is not an object")
+    if "seat_info" not in seat_infos:
+        return malformed_error("seat_info is missing")
+
+    raw_seats = seat_infos["seat_info"]
+    if raw_seats is None:
+        raw_seats = []
+    if isinstance(raw_seats, dict):
+        raw_seats = [raw_seats]
+    if not isinstance(raw_seats, list):
+        return malformed_error("seat_info is not a list or object")
+    if any(not isinstance(seat, dict) for seat in raw_seats):
+        return malformed_error("seat_info contains a non-object entry")
+    if not raw_seats and remaining_seats > 0:
+        return malformed_error("seat_info is empty while car summary has remaining seats")
+
+    return raw_seats, None
+
+
 def car_center_priority(car: dict[str, object], car_numbers: list[int]) -> tuple[float, int]:
     car_no = int(car["car_no"])
     if not car_numbers:
@@ -927,9 +957,7 @@ def command_seats(args: argparse.Namespace) -> None:
     car_payloads: list[dict[str, object]] = []
     for car in cars:
         raw = client.car_seats(raw_train, str(car["car_no_raw"]), passenger_count, room_class)
-        raw_seats = raw.get("seat_infos", {}).get("seat_info", [])
-        if isinstance(raw_seats, dict):
-            raw_seats = [raw_seats]
+        raw_seats, seat_lookup_error = extract_car_seat_rows(raw, int(car["remaining_seats"]))
         all_seats = [normalize_seat(seat) for seat in raw_seats if seat.get("h_con_seat_no") != "0A"]
         seats = sort_seats_for_booking(all_seats)
         if args.available_only:
@@ -939,7 +967,9 @@ def command_seats(args: argparse.Namespace) -> None:
         available_seats = [seat for seat in seats if seat["available"]]
         seats = seats[: args.limit]
         car_payload = dict(car)
-        car_payload["available_seat_count"] = len(available_seats)
+        if seat_lookup_error:
+            car_payload["seat_lookup_error"] = seat_lookup_error
+        car_payload["available_seat_count"] = None if seat_lookup_error else len(available_seats)
         car_payload["available_seats"] = [seat["seat"] for seat in available_seats]
         car_payload["shown_seat_count"] = len(seats)
         car_payload["seats"] = seats
