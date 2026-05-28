@@ -132,6 +132,8 @@ DYNAPATH_PATHS = [
     "/classes/com.korail.mobile.trn.prcFare.do",
     "/classes/com.korail.mobile.login.Login",
 ]
+KORAIL_CARS_INFO = "https://smart.letskorail.com:443/classes/com.korail.mobile.research.TrainResearch"
+KORAIL_CAR_DETAIL = "https://smart.letskorail.com:443/classes/com.korail.mobile.research.ResidualSeatsResearch.do"
 RESERVE_OPTION_MAP = {
     "general-first": ReserveOption.GENERAL_FIRST,
     "general-only": ReserveOption.GENERAL_ONLY,
@@ -162,6 +164,43 @@ TRAIN_ID_FIELDS = (
     "dep_code",
     "arr_code",
 )
+
+PHONE_NUMBER_DIGITS_REGEX = re.compile(r"^01\d{8,9}$")
+ROOM_CLASS_MAP = {
+    "general": "1",
+    "special": "2",
+}
+ROOM_CLASS_NAME = {
+    "1": "일반실",
+    "2": "특실",
+}
+SEAT_DIRECTION_NAME = {
+    "009": "순방향",
+    "010": "역방향",
+}
+SEAT_POSITION_NAME = {
+    "011": "1인",
+    "012": "창측",
+    "013": "내측",
+}
+SEAT_TYPE_NAME = {
+    "015": "일반석",
+    "018": "2층석",
+    "019": "유아동반석",
+    "021": "휠체어석",
+    "023": "4인동반석",
+    "027": "4인석",
+    "028": "전동휠체어석",
+    "032": "자전거",
+    "052": "대피도우미",
+}
+POWER_OUTLET_ROWS = {1, 3, 5, 7, 10, 12, 14, 15}
+POWER_OUTLET_DIRECT_COLUMNS = {"A", "D"}
+POWER_OUTLET_ADJACENT_COLUMNS = {"B", "C"}
+
+
+def is_phone_login_id(korail_id: str) -> bool:
+    return bool(korail_mod.PHONE_NUMBER_REGEX.match(korail_id) or PHONE_NUMBER_DIGITS_REGEX.match(korail_id))
 
 
 def ensure_runtime_dependencies() -> None:
@@ -334,7 +373,7 @@ class PatchedKorail(Korail):
 
         if korail_mod.EMAIL_REGEX.match(korail_id):
             input_flag = "5"
-        elif korail_mod.PHONE_NUMBER_REGEX.match(korail_id):
+        elif is_phone_login_id(korail_id):
             input_flag = "4"
         else:
             input_flag = "2"
@@ -364,7 +403,7 @@ class PatchedKorail(Korail):
         self.logined = False
         return False
 
-    def search_train(
+    def search_train_details(
         self,
         dep: str,
         arr: str,
@@ -424,17 +463,98 @@ class PatchedKorail(Korail):
         response = self._session.post(korail_mod.KORAIL_SEARCH_SCHEDULE, params=payload, headers=headers)
         data = json.loads(response.text)
         if self._result_check(data):
-            trains = [korail_mod.Train(info) for info in data["trn_infos"]["trn_info"]]
-            trains = [train for train in trains if train.dep_name == dep and train.arr_name == arr]
+            train_infos = data["trn_infos"]["trn_info"]
+            if isinstance(train_infos, dict):
+                train_infos = [train_infos]
+            details = [(korail_mod.Train(info), info) for info in train_infos]
+            details = [(train, info) for train, info in details if train.dep_name == dep and train.arr_name == arr]
             filters = [lambda train: train.has_seat()]
             if include_no_seats:
                 filters.append(lambda train: not train.has_seat())
             if include_waiting_list:
                 filters.append(lambda train: train.has_waiting_list())
-            trains = [train for train in trains if any(check(train) for check in filters)]
-            if not trains:
+            details = [(train, info) for train, info in details if any(check(train) for check in filters)]
+            if not details:
                 raise NoResultsError()
-            return trains
+            return details
+
+    def search_train(
+        self,
+        dep: str,
+        arr: str,
+        date: str | None = None,
+        time_value: str | None = None,
+        train_type: str = TrainType.ALL,
+        passengers: list[Passenger] | None = None,
+        include_no_seats: bool = False,
+        include_waiting_list: bool = False,
+    ):
+        return [
+            train
+            for train, _ in self.search_train_details(
+                dep,
+                arr,
+                date,
+                time_value,
+                train_type=train_type,
+                passengers=passengers,
+                include_no_seats=include_no_seats,
+                include_waiting_list=include_waiting_list,
+            )
+        ]
+
+    def train_cars(self, raw_train: dict[str, object], passenger_count: int = 1, room_class: str = "1") -> list[dict[str, object]]:
+        payload = self._seat_lookup_payload(raw_train, passenger_count, room_class)
+        headers, sid = self._auth_headers_and_sid(KORAIL_CARS_INFO)
+        if sid:
+            payload["Sid"] = sid
+        response = self._session.post(KORAIL_CARS_INFO, data=payload, headers=headers)
+        data = json.loads(response.text)
+        if self._result_check(data):
+            cars = data.get("srcar_infos", {}).get("srcar_info", [])
+            if isinstance(cars, dict):
+                cars = [cars]
+            return cars
+        return []
+
+    def car_seats(
+        self,
+        raw_train: dict[str, object],
+        car_no: str,
+        passenger_count: int = 1,
+        room_class: str = "1",
+    ) -> dict[str, object]:
+        payload = self._seat_lookup_payload(raw_train, passenger_count, room_class)
+        payload["txtSrcarNo"] = car_no
+        headers, sid = self._auth_headers_and_sid(KORAIL_CAR_DETAIL)
+        if sid:
+            payload["Sid"] = sid
+        response = self._session.post(KORAIL_CAR_DETAIL, data=payload, headers=headers)
+        data = json.loads(response.text)
+        if self._result_check(data):
+            return data
+        return {}
+
+    def _seat_lookup_payload(self, raw_train: dict[str, object], passenger_count: int, room_class: str) -> dict[str, object]:
+        return {
+            "Device": self._device,
+            "Version": self._version,
+            "Key": self._key,
+            "txtArvRsStnCd": raw_train.get("h_arv_rs_stn_cd", ""),
+            "txtArvStnRunOrdr": raw_train.get("h_arv_stn_run_ordr", ""),
+            "txtDptDt": raw_train.get("h_dpt_dt", ""),
+            "txtDptRsStnCd": raw_train.get("h_dpt_rs_stn_cd", ""),
+            "txtDptStnRunOrdr": raw_train.get("h_dpt_stn_run_ordr", ""),
+            "txtGdNo": "",
+            "txtMenuId": "11",
+            "txtPsrmClCd": room_class,
+            "txtRunDt": raw_train.get("h_run_dt", ""),
+            "txtSeatAttCd": "015",
+            "txtTotPsgCnt": str(passenger_count),
+            "txtTrnClsfCd": raw_train.get("h_trn_clsf_cd", ""),
+            "txtTrnGpCd": raw_train.get("h_trn_gp_cd", ""),
+            "txtTrnNo": raw_train.get("h_trn_no", ""),
+        }
 
     def reserve(self, train, passengers=None, option=ReserveOption.GENERAL_FIRST, try_waiting=False):
         reserving_seat = True
@@ -609,6 +729,14 @@ def find_train_by_id(trains, train_id: str):
     return None
 
 
+def find_train_detail_by_id(details, train_id: str):
+    expected = parse_train_id(train_id)
+    for train, raw_train in details:
+        if build_train_id_payload(train) == expected:
+            return train, raw_train
+    return None
+
+
 def normalize_train(train, index: int) -> dict[str, object]:
     return {
         "index": index,
@@ -625,6 +753,49 @@ def normalize_train(train, index: int) -> dict[str, object]:
         "has_special_seat": train.has_special_seat(),
         "has_waiting_list": train.has_waiting_list(),
         "description": str(train),
+    }
+
+
+def parse_seat_label(seat_label: str) -> tuple[int | None, str]:
+    match = re.match(r"^(\d+)([A-Za-z])$", seat_label or "")
+    if not match:
+        return None, ""
+    return int(match.group(1)), match.group(2).upper()
+
+
+def power_outlet_match(seat_label: str) -> str:
+    row, column = parse_seat_label(seat_label)
+    if row not in POWER_OUTLET_ROWS:
+        return "none"
+    if column in POWER_OUTLET_DIRECT_COLUMNS:
+        return "direct"
+    if column in POWER_OUTLET_ADJACENT_COLUMNS:
+        return "adjacent"
+    return "none"
+
+
+def normalize_seat(raw_seat: dict[str, object]) -> dict[str, object]:
+    seat_label = str(raw_seat.get("h_con_seat_no", ""))
+    return {
+        "seat": seat_label,
+        "seat_no": str(raw_seat.get("h_seat_no", "")),
+        "available": raw_seat.get("h_sale_psb_flg") == "Y",
+        "direction": SEAT_DIRECTION_NAME.get(str(raw_seat.get("h_for_rev_dir_dv", "")), str(raw_seat.get("h_for_rev_dir_dv", ""))),
+        "position": SEAT_POSITION_NAME.get(str(raw_seat.get("h_sigl_win_in_dv", "")), str(raw_seat.get("h_sigl_win_in_dv", ""))),
+        "seat_type": SEAT_TYPE_NAME.get(str(raw_seat.get("h_dmd_seat_att", "")), str(raw_seat.get("h_dmd_seat_att", ""))),
+        "near_door": raw_seat.get("h_door_nbor_flg") == "Y",
+        "power_outlet": power_outlet_match(seat_label),
+    }
+
+
+def normalize_car(raw_car: dict[str, object]) -> dict[str, object]:
+    return {
+        "car_no": int(str(raw_car.get("h_srcar_no", "0"))),
+        "car_no_raw": str(raw_car.get("h_srcar_no", "")),
+        "room_class": ROOM_CLASS_NAME.get(str(raw_car.get("h_psrm_cl_cd", "")), str(raw_car.get("h_psrm_cl_nm", ""))),
+        "room_class_code": str(raw_car.get("h_psrm_cl_cd", "")),
+        "total_seats": int(str(raw_car.get("h_seat_cnt", "0")) or "0"),
+        "remaining_seats": int(str(raw_car.get("h_rest_seat_cnt", "0")) or "0"),
     }
 
 
@@ -696,6 +867,63 @@ def command_search(args: argparse.Namespace) -> None:
     print_json({
         "count": len(visible_trains),
         "trains": [normalize_train(train, index) for index, train in enumerate(visible_trains, start=1)],
+    })
+
+
+def command_seats(args: argparse.Namespace) -> None:
+    client = build_client()
+    passengers = parse_passengers(args)
+    passenger_count = sum(passenger.count for passenger in Passenger.reduce(passengers))
+    details = client.search_train_details(
+        args.dep,
+        args.arr,
+        args.date,
+        args.time,
+        train_type=TRAIN_TYPE_MAP[args.train_type],
+        passengers=passengers,
+        include_no_seats=True,
+        include_waiting_list=True,
+    )
+    match = find_train_detail_by_id(details, args.train_id)
+    if match is None:
+        raise SystemExit(TRAIN_ID_STALE_MESSAGE)
+
+    train, raw_train = match
+    room_class = ROOM_CLASS_MAP[args.room]
+    cars = [normalize_car(car) for car in client.train_cars(raw_train, passenger_count, room_class)]
+    if args.car_no is not None:
+        cars = [car for car in cars if car["car_no"] == args.car_no]
+        if not cars:
+            raise SystemExit(f"car_no {args.car_no} is not available for {args.room}")
+
+    car_payloads: list[dict[str, object]] = []
+    for car in cars:
+        raw = client.car_seats(raw_train, str(car["car_no_raw"]), passenger_count, room_class)
+        raw_seats = raw.get("seat_infos", {}).get("seat_info", [])
+        if isinstance(raw_seats, dict):
+            raw_seats = [raw_seats]
+        all_seats = [normalize_seat(seat) for seat in raw_seats if seat.get("h_con_seat_no") != "0A"]
+        available_seats = [seat for seat in all_seats if seat["available"]]
+        seats = all_seats
+        if args.available_only:
+            seats = available_seats
+        if args.power_only:
+            seats = [seat for seat in seats if seat["power_outlet"] != "none"]
+        seats = seats[: args.limit]
+        car_payload = dict(car)
+        car_payload["available_seat_count"] = len(available_seats)
+        car_payload["available_seats"] = [seat["seat"] for seat in available_seats]
+        car_payload["shown_seat_count"] = len(seats)
+        car_payload["seats"] = seats
+        car_payloads.append(car_payload)
+
+    print_json({
+        "train": normalize_train(train, 1),
+        "room": args.room,
+        "passenger_count": passenger_count,
+        "available_only": args.available_only,
+        "power_only": args.power_only,
+        "cars": car_payloads,
     })
 
 
@@ -862,6 +1090,33 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("--include-no-seats", action="store_true", help="매진 열차도 포함")
     search_parser.add_argument("--include-waiting-list", action="store_true", help="예약 대기 가능 열차도 포함")
     search_parser.set_defaults(func=command_search)
+
+    seats_parser = subparsers.add_parser("seats", help="조회 결과 중 하나의 호차별 좌석번호를 조회합니다")
+    add_common_trip_args(seats_parser)
+    seats_parser.add_argument("--train-id", required=True, help="search 결과에서 복사한 stable train_id")
+    seats_parser.add_argument(
+        "--room",
+        choices=sorted(ROOM_CLASS_MAP),
+        default="general",
+        help="좌석을 조회할 객실 등급 (기본 general)",
+    )
+    seats_parser.add_argument(
+        "--train-type",
+        choices=sorted(TRAIN_TYPE_MAP),
+        default="ktx",
+        help="재조회할 열차 종류 — search 단계에서 사용한 값과 동일하게 지정 (기본 ktx)",
+    )
+    seats_parser.add_argument("--car-no", type=int, default=None, help="특정 호차만 조회")
+    seats_parser.add_argument(
+        "--available-only",
+        "--remaining-only",
+        dest="available_only",
+        action="store_true",
+        help="예약 가능한/남은 좌석만 출력",
+    )
+    seats_parser.add_argument("--power-only", action="store_true", help="콘센트 꿀팁 좌석(direct/adjacent)만 출력")
+    seats_parser.add_argument("--limit", type=int, default=100, help="호차별 출력할 최대 좌석 수")
+    seats_parser.set_defaults(func=command_seats)
 
     reserve_parser = subparsers.add_parser("reserve", help="조회 결과 중 하나를 예약합니다")
     add_common_trip_args(reserve_parser)
