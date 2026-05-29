@@ -97,8 +97,14 @@ class IsAvailableTest(unittest.TestCase):
     def test_y_and_zero_count(self):
         self.assertTrue(helper.is_available({"rsrvtAvail": "Y", "rsrvtCnt": 0}))
 
+    def test_y_and_string_zero_count(self):
+        self.assertTrue(helper.is_available({"rsrvtAvail": "Y", "rsrvtCnt": "0"}))
+
     def test_y_but_already_booked(self):
         self.assertFalse(helper.is_available({"rsrvtAvail": "Y", "rsrvtCnt": 1}))
+
+    def test_y_but_string_booked_count(self):
+        self.assertFalse(helper.is_available({"rsrvtAvail": "Y", "rsrvtCnt": "1"}))
 
     def test_not_available(self):
         self.assertFalse(helper.is_available({"rsrvtAvail": "N", "rsrvtCnt": 0}))
@@ -222,6 +228,50 @@ class PrintTextTest(unittest.TestCase):
         with redirect_stdout(buffer):
             helper.print_text(payload)
         self.assertIn("(no available rooms at lookup time)", buffer.getvalue())
+
+
+class MainOutputTest(unittest.TestCase):
+    def run_main(self, argv, payload):
+        session = make_session({GEOJE_FOREST_ID: GEOJE_FOREST_NAME})
+        buffer = io.StringIO()
+        with mock.patch.object(sys, "argv", ["run_foresttrip_vacancy.py", *argv]):
+            with mock.patch.object(helper, "get_session", return_value=session):
+                with mock.patch.object(helper, "resolve_targets", return_value={GEOJE_FOREST_ID: GEOJE_FOREST_NAME}):
+                    with mock.patch.object(helper, "collect_results", return_value=payload):
+                        with redirect_stdout(buffer):
+                            exit_code = helper.main()
+        return exit_code, buffer.getvalue()
+
+    def test_main_text_output_returns_success_when_fetches_succeed(self):
+        payload = run_collect(
+            make_session({GEOJE_FOREST_ID: GEOJE_FOREST_NAME}),
+            {GEOJE_FOREST_ID: GEOJE_FOREST_NAME},
+            GEOJE_ROWS,
+            dates=["20260513"],
+        )
+        exit_code, output = self.run_main(["--forest-id", GEOJE_FOREST_ID, "--text"], payload)
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("ForestTrip Vacancy Lookup", output)
+        self.assertIn("filter_hits: 3", output)
+        self.assertIn("동백1", output)
+
+    def test_main_json_output_reports_failure_and_returns_nonzero(self):
+        payload = {
+            "forests_scanned": 1,
+            "filter_hits": 0,
+            "fetch_failures": 1,
+            "failures": [{"forest_id": GEOJE_FOREST_ID, "category": "01", "error": "http_401"}],
+            "concurrency": 1,
+            "date_range": {"from": "20260512", "to": "20260513"},
+            "results": [],
+        }
+        exit_code, output = self.run_main(["--forest-id", GEOJE_FOREST_ID, "--json"], payload)
+
+        self.assertEqual(exit_code, 1)
+        rendered = json.loads(output)
+        self.assertEqual(rendered["fetch_failures"], 1)
+        self.assertEqual(rendered["failures"][0]["error"], "http_401")
 
 
 class GroundTruthTest(unittest.TestCase):

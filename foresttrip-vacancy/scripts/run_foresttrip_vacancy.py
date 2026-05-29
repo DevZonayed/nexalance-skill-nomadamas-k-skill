@@ -380,7 +380,11 @@ def fetch_one(
 
 
 def is_available(row: dict[str, Any]) -> bool:
-    return row.get("rsrvtAvail") == "Y" and row.get("rsrvtCnt") == 0
+    try:
+        reserved_count = int(row.get("rsrvtCnt"))
+    except (TypeError, ValueError):
+        return False
+    return row.get("rsrvtAvail") == "Y" and reserved_count == 0
 
 
 def is_reserve_room(row: dict[str, Any]) -> bool:
