@@ -89,10 +89,9 @@ KSKILL_PROXY_BASE_URL=
 ### startup-support
 
 #### API 키 관리
-- **환경 변수**: `DATA_GO_KR_API_KEY`
-- **용도**: 공공데이터포털 API 인증
-- **보안**: 절대 코드에 하드코딩하지 않음
-- **관리**: 환경 변수 또는 시크릿 매니저를 통해 관리
+- 기본 사용자는 `DATA_GO_KR_API_KEY` 를 설정하지 않습니다.
+- `DATA_GO_KR_API_KEY` 는 hosted/self-host `k-skill-proxy` 운영자가 서버에 설정하는 upstream 키입니다.
+- 로컬에서 직접 공공데이터포털 API를 호출하는 실험 경로에서만 사용자 환경에 임시로 둘 수 있습니다.
 
 #### 데이터 보안
 - **데이터 소스**: 공공기관 공식 API만 사용

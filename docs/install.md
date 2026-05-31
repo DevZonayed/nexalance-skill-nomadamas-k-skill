@@ -428,9 +428,7 @@ node scripts/korean_character_count.js --text $'첫 줄\n둘째 줄🙂' --profi
 startup-support 스킬은 다음과 같은 환경이 필요합니다:
 
 #### 환경 변수
-```bash
-export DATA_GO_KR_API_KEY="your_api_key_here"
-```
+기본 사용자는 별도 API 키가 필요 없습니다. `DATA_GO_KR_API_KEY` 는 hosted/self-host `k-skill-proxy` 운영자가 서버에 설정하는 값입니다.
 
 #### 의존성
 - Python 3.7+

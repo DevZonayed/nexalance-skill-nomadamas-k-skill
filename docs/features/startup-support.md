@@ -43,10 +43,7 @@
 
 #### k-skill-proxy 라우트
 
-- `GET /v1/startup-support/list`: 지원사업 목록 조회
-- `GET /v1/startup-support/detail/:program_id`: 특정 지원사업 상세 정보
-- `GET /v1/startup-support/region/:region`: 특정 지역 지원사업 조회
-- `GET /v1/startup-support/deadline`: 임박 마감 지원사업
+공공데이터포털 K-Startup OpenAPI는 별도 `kstartup-search` 스킬과 `k-skill-proxy`의 `/v1/kstartup/*` 라우트가 담당합니다. `startup-support` helper는 지역별 공개 API 목록을 조회하고, 상세 정보는 결과의 공식 `url` 로 확인합니다.
 
 #### Python 스크립트
 
@@ -63,8 +60,7 @@ keyword_programs = search_startup_support(keyword='청년')
 # 마감 임박 검색
 deadline_programs = search_startup_support(deadline_only=True)
 
-# 상세 정보 조회
-detail = get_startup_program_detail('test_001')
+# 상세 정보는 목록 결과의 공식 url로 확인
 ```
 
 ## 데이터 소스
@@ -72,7 +68,7 @@ detail = get_startup_program_detail('test_001')
 ### 1. 공공데이터포털
 - **기관**: 중소벤처기업부
 - **API**: 스타트업 지원사업 정보
-- **인증**: API 키 필요 (DATA_GO_KR_API_KEY)
+- **인증**: hosted/self-host proxy 운영 서버에서 API 키 주입
 
 ### 2. 지자체별 사이트
 - **서울시**: https://seoulstartup.go.kr

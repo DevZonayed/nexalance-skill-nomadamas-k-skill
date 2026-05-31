@@ -65,12 +65,7 @@ metadata:
 
 ### Proxy Integration
 
-API 요청은 `k-skill-proxy`의 `/v1/startup-support/*` 라우트로 중계되며, 다음과 같은 엔드포인트를 사용:
-
-- `/v1/startup-support/list` - 지원사업 목록 조회
-- `/v1/startup-support/detail/<program_id>` - 특정 지원사업 상세 정보
-- `/v1/startup-support/region/<region>` - 특정 지역 지원사업 조회
-- `/v1/startup-support/deadline` - 임박 마감 지원사업
+공공데이터포털 K-Startup OpenAPI는 `kstartup-search` 스킬과 `k-skill-proxy`의 `/v1/kstartup/*` 라우트가 담당한다. 이 스킬의 helper는 지역별 공개 API 목록을 조회하고, 상세 정보는 결과의 공식 `url` 로 확인한다.
 
 ## Output format
 
