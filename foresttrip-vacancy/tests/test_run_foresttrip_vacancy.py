@@ -173,6 +173,56 @@ class CollectResultsFilterTest(unittest.TestCase):
         )
         self.assertEqual(donbaek_count, 1)
 
+    def test_dedup_keeps_same_room_name_from_distinct_categories(self):
+        rows_by_category = {
+            "01": [
+                {
+                    "insttId": GEOJE_FOREST_ID,
+                    "insttNm": GEOJE_FOREST_NAME,
+                    "useDt": "20260513",
+                    "goodsNm": "같은이름",
+                    "goodsClsscNm": "숙박",
+                    "rsrvtAvail": "Y",
+                    "rsrvtCnt": 0,
+                }
+            ],
+            "02": [
+                {
+                    "insttId": GEOJE_FOREST_ID,
+                    "insttNm": GEOJE_FOREST_NAME,
+                    "useDt": "20260513",
+                    "goodsNm": "같은이름",
+                    "goodsClsscNm": "야영",
+                    "rsrvtAvail": "Y",
+                    "rsrvtCnt": 0,
+                }
+            ],
+        }
+
+        def fetch_category(*, forest_id, category, **_):
+            return forest_id, category, rows_by_category[category], None
+
+        with mock.patch.object(helper, "fetch_one", side_effect=fetch_category):
+            with mock.patch.object(helper, "datetime", wraps=datetime) as mock_dt:
+                mock_dt.now.return_value = FIXED_NOW
+                payload = helper.collect_results(
+                    session=self.session,
+                    targets=self.targets,
+                    categories=("01", "02"),
+                    dates=("20260513",),
+                    week_range=None,
+                    concurrency=1,
+                )
+
+        self.assertEqual(payload["filter_hits"], 2)
+        observed = [
+            (room["name"], room["category"])
+            for forest in payload["results"]
+            for date in forest["dates"]
+            for room in date["rooms"]
+        ]
+        self.assertEqual(observed, [("같은이름", "숙박"), ("같은이름", "야영")])
+
 
 class StrictUseDtGateTest(unittest.TestCase):
     """Bug 1 regression: API returns 5-day window even when single-day requested."""

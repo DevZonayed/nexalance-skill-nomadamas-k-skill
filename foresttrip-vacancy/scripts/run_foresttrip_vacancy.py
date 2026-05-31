@@ -458,14 +458,15 @@ def collect_results(
                 if use_dt < today or use_dt > last_day:
                     continue
                 normalized = normalize_row(row, session.forests)
+                normalized["source_category"] = category
                 if date_filter is not None and normalized["use_dt"] not in date_filter:
                     continue
                 rows.append(normalized)
 
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str]] = set()
     deduped: list[dict[str, Any]] = []
     for row in rows:
-        key = (row["forest_id"], row["use_dt"], row["name"])
+        key = (row["forest_id"], row["use_dt"], row["source_category"], row["name"])
         if key in seen:
             continue
         seen.add(key)
