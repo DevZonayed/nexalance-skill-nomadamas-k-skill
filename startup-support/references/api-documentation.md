@@ -1,68 +1,54 @@
-# 스타트업 지원사업 API 문서
+# startup-support API surface
 
-## API 엔드포인트
+`startup-support` is a read-only helper over the existing K-Startup proxy route. It does not add independent proxy endpoints.
 
-### k-skill-proxy 라우트
+## Proxy route used
 
-#### 목록 조회
-```
-GET /v1/startup-support/list
-```
-
-파라미터:
-- `region`: 지역 (선택)
-- `keyword`: 검색 키워드 (선택)
-- `support_type`: 지원 유형 (선택)
-- `deadline_only`: 마감 임박만 검색 (선택)
-
-#### 상세 조회
-```
-GET /v1/startup-support/detail/:program_id
+```text
+GET /v1/kstartup/announcements
 ```
 
-#### 지역별 조회
-```
-GET /v1/startup-support/region/:region
-```
+Common query mapping:
 
-#### 마감 임박 조회
-```
-GET /v1/startup-support/deadline
-```
+- `region` -> `supt_regin`
+- `keyword` -> `biz_pbanc_nm`
+- `support_type` -> `supt_biz_clsfc`
+- `deadline_only=true` -> `rcrt_prgs_yn=Y`
+- `page` -> `page`
+- `per_page` -> `perPage`
 
-## Python API
+Authentication is handled by hosted or self-hosted `k-skill-proxy`. Users do not pass a data.go.kr service key to this helper.
 
-### 클래스 구조
+## Python helper
 
 ```python
-class StartupSupportAPI:
-    def __init__(self)
-    def search_programs(self, region, keyword, support_type, deadline_only)
-    def get_program_detail(self, program_id)
-    def _search_data_go_kr(self, region, keyword, support_type)
-    def _search_by_region(self, region, keyword, support_type)
-    def _parse_program_from_data_go_kr(self, item)
-    def _parse_program_from_region_api(self, item, region)
-    def _filter_upcoming_deadline(self, programs)
-    def _remove_duplicates(self, programs)
-    def _sort_programs(self, programs)
+programs = search_startup_support(
+    region="서울특별시",
+    keyword="청년",
+    support_type="사업화",
+    deadline_only=True,
+)
 ```
 
-### 사용 예제
+The CLI exposes the same search:
 
-```python
-# 기본 검색
-programs = search_startup_support()
-
-# 지역별 검색
-seoul_programs = search_startup_support(region='서울특별시')
-
-# 키워드 검색
-keyword_programs = search_startup_support(keyword='청년')
-
-# 마감 임박 검색
-deadline_programs = search_startup_support(deadline_only=True)
-
-# 상세 정보 조회
-detail = get_startup_program_detail('test_001')
+```bash
+python3 startup-support/scripts/startup_support.py \
+  --region 서울특별시 \
+  --keyword 청년 \
+  --deadline-only \
+  --per-page 5 \
+  --text
 ```
+
+For request inspection without network or credentials:
+
+```bash
+python3 startup-support/scripts/startup_support.py \
+  --region 서울특별시 \
+  --keyword 청년 \
+  --deadline-only \
+  --dry-run
+```
+
+Detailed eligibility and application steps must be confirmed from each result's official `url`.
