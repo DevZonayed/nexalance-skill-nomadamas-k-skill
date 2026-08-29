@@ -21,7 +21,7 @@
     "release:npm": "changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.5",
+    "@changesets/cli": "^3.0.1",
     "@types/node": "^22.14.1",
     "typescript": "^5.8.2"
   }
